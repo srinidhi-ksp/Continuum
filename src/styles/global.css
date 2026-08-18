@@ -906,3 +906,757 @@ select {
 
   line-height: 1.5;
 }
+/* =========================================
+   TIMELINE PAGE
+========================================= */
+
+.timeline-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+
+/* =========================================
+   PAGE HEADER
+========================================= */
+
+.timeline-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+
+  margin-bottom: 24px;
+}
+
+.timeline-page-header h1 {
+  font-size: 28px;
+  font-weight: 650;
+
+  margin-bottom: 6px;
+}
+
+.timeline-page-header p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.timeline-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.timeline-date-button,
+.timeline-primary-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  height: 40px;
+
+  padding: 0 14px;
+
+  border-radius: 10px;
+
+  cursor: pointer;
+
+  font-size: 13px;
+}
+
+.timeline-date-button {
+  background: white;
+
+  border: 1px solid var(--border);
+
+  color: var(--text-primary);
+}
+
+.timeline-primary-button {
+  border: 1px solid var(--primary);
+
+  background: var(--primary);
+
+  color: white;
+
+  font-weight: 600;
+}
+
+
+/* =========================================
+   PATIENT BAR
+========================================= */
+
+.timeline-patient-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 18px 20px;
+
+  margin-bottom: 30px;
+
+  background: white;
+
+  border: 1px solid var(--border);
+
+  border-radius: 14px;
+}
+
+.timeline-patient-left {
+  display: flex;
+  align-items: center;
+}
+
+.timeline-patient-avatar {
+  width: 48px;
+  height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-right: 13px;
+
+  border-radius: 50%;
+
+  background: #eeeeff;
+
+  color: var(--primary);
+
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.timeline-patient-left h2 {
+  font-size: 16px;
+
+  margin-bottom: 5px;
+}
+
+.timeline-patient-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  color: var(--text-secondary);
+
+  font-size: 12px;
+}
+
+.meta-dot {
+  color: #c4c7cc;
+}
+
+.timeline-active-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+
+  margin-left: 8px;
+}
+
+.timeline-active-status span {
+  width: 6px;
+  height: 6px;
+
+  border-radius: 50%;
+
+  background: var(--success);
+}
+
+.patient-link-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  border: none;
+
+  background: transparent;
+
+  color: var(--primary);
+
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.rotate-arrow {
+  transform: rotate(180deg);
+}
+
+
+/* =========================================
+   DATE HEADING
+========================================= */
+
+.timeline-date-heading {
+  display: flex;
+  align-items: center;
+
+  gap: 18px;
+
+  margin-bottom: 25px;
+}
+
+.timeline-date-line {
+  flex: 1;
+
+  height: 1px;
+
+  background: var(--border);
+}
+
+.timeline-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  white-space: nowrap;
+}
+
+.timeline-date span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.timeline-date small {
+  color: var(--text-secondary);
+
+  font-size: 11px;
+}
+
+
+/* =========================================
+   TIMELINE CONTAINER
+========================================= */
+
+.timeline-container {
+  position: relative;
+}
+
+
+/* =========================================
+   TIMELINE EVENT
+========================================= */
+
+.timeline-event {
+  display: grid;
+
+  grid-template-columns: 90px 48px 1fr;
+
+  min-height: 150px;
+}
+
+
+/* Time */
+
+.timeline-event-time {
+  padding-top: 18px;
+
+  color: var(--text-secondary);
+
+  font-size: 12px;
+
+  text-align: right;
+
+  padding-right: 16px;
+}
+
+
+/* =========================================
+   MARKER
+========================================= */
+
+.timeline-marker-column {
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.timeline-event-icon {
+  width: 40px;
+  height: 40px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  border-radius: 12px;
+
+  position: relative;
+  z-index: 2;
+}
+
+.timeline-connector {
+  width: 1px;
+
+  flex: 1;
+
+  margin-top: 6px;
+
+  background: var(--border);
+}
+
+
+/* Event icon colors */
+
+.food-icon {
+  background: #fff4df;
+  color: #d18b00;
+}
+
+.medication-icon {
+  background: #eeeeff;
+  color: var(--primary);
+}
+
+.symptom-icon {
+  background: #fff0f0;
+  color: #dc5b5b;
+}
+
+.appointment-icon {
+  background: #edf6ff;
+  color: #4285c5;
+}
+
+
+/* =========================================
+   EVENT CARD
+========================================= */
+
+.timeline-event-card {
+  margin-bottom: 22px;
+
+  padding: 18px 20px;
+
+  background: white;
+
+  border: 1px solid var(--border);
+
+  border-radius: 14px;
+
+  transition: 0.2s ease;
+}
+
+.timeline-event-card:hover {
+  border-color: #d7d8ee;
+
+  box-shadow: 0 4px 16px rgba(30, 35, 60, 0.04);
+}
+
+
+/* Header */
+
+.timeline-event-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.timeline-event-type {
+  display: block;
+
+  color: var(--text-secondary);
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.8px;
+
+  text-transform: uppercase;
+
+  margin-bottom: 5px;
+}
+
+.timeline-event-header h3 {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.event-menu {
+  width: 30px;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+
+  background: transparent;
+
+  color: var(--text-secondary);
+
+  border-radius: 7px;
+
+  cursor: pointer;
+}
+
+.event-menu:hover {
+  background: var(--background);
+}
+
+
+/* Description */
+
+.timeline-event-description {
+  margin-top: 12px;
+
+  color: #4b5563;
+
+  font-size: 13px;
+
+  line-height: 1.6;
+}
+
+
+/* =========================================
+   EVENT FOOTER
+========================================= */
+
+.timeline-event-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-top: 16px;
+
+  padding-top: 13px;
+
+  border-top: 1px solid #f0f1f3;
+}
+
+.event-caregiver {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  color: var(--text-secondary);
+
+  font-size: 11px;
+}
+
+.event-caregiver strong {
+  color: var(--text-primary);
+}
+
+.small-avatar {
+  width: 25px;
+  height: 25px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #f0f0ff;
+
+  color: var(--primary);
+
+  font-size: 10px;
+
+  font-weight: 700;
+}
+
+.event-completed {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+
+  padding: 5px 8px;
+
+  border-radius: 7px;
+
+  background: #eaf8ef;
+
+  color: var(--success);
+
+  font-size: 10px;
+  font-weight: 600;
+}
+
+
+/* =========================================
+   COMMENTS
+========================================= */
+
+.event-comments {
+  margin-top: 16px;
+
+  padding: 14px;
+
+  border-radius: 10px;
+
+  background: #f8f9fc;
+}
+
+.comments-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  margin-bottom: 12px;
+
+  color: var(--text-secondary);
+
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.timeline-comment {
+  display: flex;
+  align-items: flex-start;
+
+  gap: 8px;
+
+  margin-bottom: 12px;
+}
+
+.comment-avatar {
+  width: 26px;
+  height: 26px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: white;
+
+  border: 1px solid var(--border);
+
+  color: var(--primary);
+
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.comment-content {
+  flex: 1;
+
+  padding: 8px 10px;
+
+  background: white;
+
+  border: 1px solid #edf0f3;
+
+  border-radius: 9px;
+}
+
+.comment-content strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  font-size: 11px;
+}
+
+.comment-content p {
+  color: var(--text-secondary);
+
+  font-size: 11px;
+
+  line-height: 1.5;
+}
+
+.add-comment-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+
+  margin-top: 4px;
+
+  border: none;
+
+  background: transparent;
+
+  color: var(--primary);
+
+  font-size: 11px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+
+/* =========================================
+   BOTTOM ACTIONS
+========================================= */
+
+.timeline-bottom-actions {
+  display: flex;
+  justify-content: center;
+
+  gap: 10px;
+
+  margin: 10px 0 25px;
+}
+
+.timeline-secondary-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  padding: 9px 14px;
+
+  background: white;
+
+  border: 1px solid var(--border);
+
+  border-radius: 9px;
+
+  color: var(--text-primary);
+
+  font-size: 12px;
+
+  cursor: pointer;
+}
+
+.timeline-secondary-button:hover {
+  border-color: #cfd1e9;
+
+  color: var(--primary);
+}
+
+
+/* =========================================
+   TIMELINE PRINCIPLE
+========================================= */
+
+.timeline-principle {
+  display: flex;
+  align-items: flex-start;
+
+  gap: 12px;
+
+  padding: 17px 19px;
+
+  margin-bottom: 30px;
+
+  border: 1px solid #e4e4f6;
+
+  border-radius: 13px;
+
+  background: #f8f8ff;
+}
+
+.principle-icon {
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  border-radius: 9px;
+
+  background: #eeeeff;
+
+  color: var(--primary);
+}
+
+.timeline-principle strong {
+  display: block;
+
+  margin-bottom: 4px;
+
+  font-size: 12px;
+}
+
+.timeline-principle p {
+  max-width: 750px;
+
+  color: var(--text-secondary);
+
+  font-size: 11px;
+
+  line-height: 1.6;
+}
+
+/* =========================================
+   TIMELINE DATE PICKER
+========================================= */
+
+.timeline-date-wrapper {
+  position: relative;
+}
+
+.hidden-date-input {
+  position: absolute;
+
+  width: 1px;
+  height: 1px;
+
+  opacity: 0;
+
+  pointer-events: none;
+}
+
+
+/* =========================================
+   TIMELINE EMPTY STATE
+========================================= */
+
+.timeline-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 260px;
+
+  padding: 40px;
+
+  background: white;
+
+  border: 1px solid var(--border);
+
+  border-radius: 14px;
+
+  text-align: center;
+}
+
+.timeline-empty-icon {
+  width: 48px;
+  height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 15px;
+
+  border-radius: 50%;
+
+  background: #eeeeff;
+
+  color: var(--primary);
+}
+
+.timeline-empty h3 {
+  font-size: 15px;
+
+  margin-bottom: 6px;
+}
+
+.timeline-empty p {
+  max-width: 400px;
+
+  color: var(--text-secondary);
+
+  font-size: 12px;
+
+  line-height: 1.5;
+}
