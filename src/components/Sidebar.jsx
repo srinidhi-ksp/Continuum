@@ -1,3 +1,4 @@
+import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   UserRound,
@@ -5,6 +6,7 @@ import {
   Clock3,
   UsersRound,
   Settings,
+  Pill,
 } from "lucide-react";
 
 function Sidebar() {
@@ -18,39 +20,44 @@ function Sidebar() {
 
       <nav className="sidebar-nav">
 
-        <a href="/" className="nav-item active">
+        <NavLink to="/" end className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
           <LayoutDashboard size={20} />
           <span>Dashboard</span>
-        </a>
+        </NavLink>
 
-        <a href="/patient" className="nav-item">
+        <NavLink to="/patient" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
           <UserRound size={20} />
           <span>Patient</span>
-        </a>
+        </NavLink>
 
-        <a href="/daily-care" className="nav-item">
+        <NavLink to="/daily-care" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
           <ClipboardPlus size={20} />
           <span>Daily Care</span>
-        </a>
+        </NavLink>
 
-        <a href="/timeline" className="nav-item">
+        <NavLink to="/medications" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
+          <Pill size={20} />
+          <span>Medications</span>
+        </NavLink>
+
+        <NavLink to="/timeline" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
           <Clock3 size={20} />
           <span>Timeline</span>
-        </a>
+        </NavLink>
 
       </nav>
 
       <div className="sidebar-bottom">
 
-        <a href="#" className="nav-item">
+        <NavLink to="/care-circle" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
           <UsersRound size={20} />
           <span>Care Circle</span>
-        </a>
+        </NavLink>
 
-        <a href="#" className="nav-item">
+        <NavLink to="/settings" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
           <Settings size={20} />
           <span>Settings</span>
-        </a>
+        </NavLink>
 
       </div>
 

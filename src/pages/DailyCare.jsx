@@ -1,79 +1,80 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { usePatient } from "../context/PatientContext";
+
+const CARE_TYPES = ["Food", "Water", "Sleep", "Medication", "Mood", "Symptom", "General Note"];
+
+const CARE_ICONS = {
+  Food: "🍴", Water: "💧", Sleep: "🌙", Medication: "💊",
+  Mood: "🙂", Symptom: "⚠️", "General Note": "📝",
+};
+
+const MOODS = ["Happy", "Calm", "Anxious", "Sad", "Agitated", "Confused", "Restless"];
+const SEVERITIES = ["Mild", "Moderate", "Severe"];
+const FOOD_UNITS = ["pieces", "grams", "ml", "cups", "bowls", "plates"];
+const WATER_UNITS = ["ml", "glasses", "litres"];
 
 export default function DailyCare() {
+  const { currentPatient, currentMedications, currentLogs, setCurrentLogs } = usePatient();
   const [careType, setCareType] = useState("Food");
-  const [quantity, setQuantity] = useState("");
-  const [symptoms, setSymptoms] = useState("");
-  const [notes, setNotes] = useState("");
+  const [form, setForm] = useState({});
 
-  const [logs, setLogs] = useState([
-    {
-      id: 1,
-      type: "Food",
-      quantity: "2 idlis + milk",
-      symptoms: "None",
-      notes: "Breakfast completed normally.",
-      time: "08:00 AM",
-      addedBy: "Meera",
-    },
-    {
-      id: 2,
-      type: "Medication",
-      quantity: "Donepezil 5mg",
-      symptoms: "None",
-      notes: "Medicine taken on time.",
-      time: "08:15 AM",
-      addedBy: "Arjun",
-    },
-    {
-      id: 3,
-      type: "Water",
-      quantity: "250 ml",
-      symptoms: "None",
-      notes: "Water intake recorded.",
-      time: "10:30 AM",
-      addedBy: "Meera",
-    },
-  ]);
+  // Reset form when care type changes
+  useEffect(() => { setForm({}); }, [careType]);
+
+  const activeMeds = currentMedications.filter(m => m.active);
+
+  const f = (name, val) => setForm(p => ({ ...p, [name]: val }));
 
   const handleAddLog = (e) => {
     e.preventDefault();
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    let entry = { id: Date.now(), type: careType, time: now, addedBy: "You" };
 
-    if (!quantity.trim()) {
-      alert("Please enter quantity.");
-      return;
+    if (careType === "Food") {
+      if (!form.foodItem) { alert("Please enter the food item."); return; }
+      entry = { ...entry, foodItem: form.foodItem, quantity: form.quantity || "", unit: form.unit || "pieces", notes: form.notes || "" };
+    } else if (careType === "Water") {
+      if (!form.quantity) { alert("Please enter quantity."); return; }
+      entry = { ...entry, quantity: form.quantity, unit: form.unit || "ml", notes: form.notes || "" };
+    } else if (careType === "Sleep") {
+      if (!form.hours && !form.minutes) { alert("Please enter sleep duration."); return; }
+      entry = { ...entry, hours: form.hours || "0", minutes: form.minutes || "0", wakeTime: form.wakeTime || "", notes: form.notes || "" };
+    } else if (careType === "Medication") {
+      if (!form.medId) { alert("Please select a medication."); return; }
+      const med = activeMeds.find(m => m.id === form.medId);
+      entry = { ...entry, medId: form.medId, medName: med?.name || "", medDosage: med?.dosage || "", medStatus: form.medStatus || "Taken", scheduledTime: med?.scheduledTime || "", notes: form.notes || "" };
+    } else if (careType === "Mood") {
+      if (!form.mood) { alert("Please select a mood."); return; }
+      entry = { ...entry, mood: form.mood, notes: form.notes || "" };
+    } else if (careType === "Symptom") {
+      if (!form.symptom) { alert("Please describe the symptom."); return; }
+      entry = { ...entry, symptom: form.symptom, severity: form.severity || "Mild", notes: form.notes || "" };
+    } else {
+      if (!form.notes) { alert("Please enter a note."); return; }
+      entry = { ...entry, notes: form.notes };
     }
 
-    const newLog = {
-      id: Date.now(),
-      type: careType,
-      quantity: quantity,
-      symptoms: symptoms || "None",
-      notes: notes || "No additional notes.",
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      addedBy: "You",
-    };
-
-    setLogs([newLog, ...logs]);
-
-    setQuantity("");
-    setSymptoms("");
-    setNotes("");
-
-    alert("Daily care log added successfully.");
+    setCurrentLogs(prev => [entry, ...(prev || [])]);
+    setForm({});
   };
 
-  const getIcon = (type) => {
-    if (type === "Food") return "🍴";
-    if (type === "Water") return "💧";
-    if (type === "Sleep") return "🌙";
-    if (type === "Medication") return "💊";
-    if (type === "Mood") return "🙂";
-    return "📝";
+  const getLogTitle = (log) => {
+    if (log.type === "Food") return `${log.foodItem}${log.quantity ? ` · ${log.quantity} ${log.unit}` : ""}`;
+    if (log.type === "Water") return `${log.quantity} ${log.unit}`;
+    if (log.type === "Sleep") return `${log.hours || 0}h ${log.minutes || 0}m`;
+    if (log.type === "Medication") return `${log.medName} ${log.medDosage}`;
+    if (log.type === "Mood") return log.mood;
+    if (log.type === "Symptom") return log.symptom;
+    return "Note";
   };
+
+  const getLogBadge = (log) => {
+    if (log.type === "Medication") return log.medStatus === "Taken" ? { text: "Taken", color: "#1a9a5c", bg: "#e8f8f0" } : log.medStatus === "Skipped" ? { text: "Skipped", color: "#d45c5c", bg: "#fff0f0" } : { text: "Not Taken", color: "#b97a18", bg: "#fff5df" };
+    if (log.type === "Symptom") return { text: log.severity, color: log.severity === "Severe" ? "#d45c5c" : log.severity === "Moderate" ? "#b97a18" : "#1a9a5c", bg: log.severity === "Severe" ? "#fff0f0" : log.severity === "Moderate" ? "#fff5df" : "#e8f8f0" };
+    return null;
+  };
+
+  const getIcon = (type) => CARE_ICONS[type] || "📝";
 
   return (
     <div className="daily-care-page">
@@ -350,8 +351,8 @@ export default function DailyCare() {
 
         .summary-row {
           display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 10px;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 8px;
           margin-bottom: 20px;
         }
 
@@ -527,29 +528,7 @@ export default function DailyCare() {
         }
       `}</style>
 
-      {/* HEADER */}
-      <header className="top-header">
-        <div className="brand">
-          <div className="brand-icon">C</div>
-          CONTINUUM
-        </div>
-
-        <div className="header-right">
-          <div className="header-icon">⌕</div>
-          <div className="header-icon">♧</div>
-
-          <div className="caregiver">
-            <div className="avatar">S</div>
-
-            <div>
-              <div className="caregiver-name">Srinidhi</div>
-              <div className="caregiver-role">Caregiver</div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* MAIN CONTENT */}
+      {/* MAIN CONTENT — no redundant internal header; layout already provides Sidebar + Navbar */}
       <main className="main-content">
 
         {/* PAGE TITLE */}
@@ -562,7 +541,7 @@ export default function DailyCare() {
             </h1>
 
             <div className="page-description">
-              Record and monitor Lakshmi Ammal's daily care activities.
+              Record and monitor {currentPatient.name}'s daily care activities.
             </div>
           </div>
         </div>
@@ -572,18 +551,18 @@ export default function DailyCare() {
           <div className="patient-info">
 
             <div className="patient-avatar">
-              L
+              {currentPatient.name.charAt(0)}
             </div>
 
             <div>
               <div className="patient-name">
-                Lakshmi Ammal
+                {currentPatient.name}
               </div>
 
               <div className="patient-details">
-                72 years
+                {currentPatient.age} years
                 <span> • </span>
-                Dementia
+                {currentPatient.condition}
 
                 <span className="active-status">
                   ● Care circle active
@@ -614,81 +593,165 @@ export default function DailyCare() {
 
             <form onSubmit={handleAddLog}>
 
-              {/* TYPE */}
+              {/* CARE TYPE */}
               <div className="form-group">
-
-                <label className="form-label">
-                  Care Type <span className="required">*</span>
-                </label>
-
-                <select
-                  className="form-select"
-                  value={careType}
-                  onChange={(e) => setCareType(e.target.value)}
-                >
-                  <option value="Food">Food</option>
-                  <option value="Water">Water</option>
-                  <option value="Sleep">Sleep</option>
-                  <option value="Medication">Medication</option>
-                  <option value="Mood">Mood</option>
+                <label className="form-label">Care Type <span className="required">*</span></label>
+                <select className="form-select" value={careType} onChange={(e) => setCareType(e.target.value)}>
+                  {CARE_TYPES.map(t => <option key={t}>{t}</option>)}
                 </select>
-
               </div>
 
-              {/* QUANTITY */}
-              <div className="form-group">
+              {/* FOOD */}
+              {careType === "Food" && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Food Item <span className="required">*</span></label>
+                    <input className="form-input" placeholder="e.g. Idli, Rice, Banana" value={form.foodItem || ""} onChange={e => f("foodItem", e.target.value)} />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div className="form-group">
+                      <label className="form-label">Quantity</label>
+                      <input className="form-input" type="number" placeholder="2" value={form.quantity || ""} onChange={e => f("quantity", e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Unit</label>
+                      <select className="form-select" value={form.unit || "pieces"} onChange={e => f("unit", e.target.value)}>
+                        {FOOD_UNITS.map(u => <option key={u}>{u}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Notes</label>
+                    <textarea className="form-textarea" placeholder="Any observations..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
+                  </div>
+                </>
+              )}
 
-                <label className="form-label">
-                  Quantity <span className="required">*</span>
-                </label>
+              {/* WATER */}
+              {careType === "Water" && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div className="form-group">
+                      <label className="form-label">Quantity <span className="required">*</span></label>
+                      <input className="form-input" type="number" placeholder="250" value={form.quantity || ""} onChange={e => f("quantity", e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Unit</label>
+                      <select className="form-select" value={form.unit || "ml"} onChange={e => f("unit", e.target.value)}>
+                        {WATER_UNITS.map(u => <option key={u}>{u}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Notes</label>
+                    <input className="form-input" placeholder="Optional observation" value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
+                  </div>
+                </>
+              )}
 
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder="Example: 250 ml, 2 tablets, 7 hours"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                />
+              {/* SLEEP */}
+              {careType === "Sleep" && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div className="form-group">
+                      <label className="form-label">Hours</label>
+                      <input className="form-input" type="number" placeholder="7" min="0" max="24" value={form.hours || ""} onChange={e => f("hours", e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Minutes</label>
+                      <input className="form-input" type="number" placeholder="30" min="0" max="59" value={form.minutes || ""} onChange={e => f("minutes", e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Wake-up Time</label>
+                    <input className="form-input" type="time" value={form.wakeTime || ""} onChange={e => f("wakeTime", e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Notes</label>
+                    <textarea className="form-textarea" placeholder="Any sleep observations..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
+                  </div>
+                </>
+              )}
 
-              </div>
+              {/* MEDICATION */}
+              {careType === "Medication" && (
+                <>
+                  {activeMeds.length === 0 ? (
+                    <div style={{ background: "#fff5df", border: "1px solid #f5d98a", borderRadius: 9, padding: "12px 14px", fontSize: 13, color: "#b97a18", marginBottom: 12 }}>
+                      No active medications found. Add medications in the Medications page first.
+                    </div>
+                  ) : (
+                    <div className="form-group">
+                      <label className="form-label">Select Medication <span className="required">*</span></label>
+                      <select className="form-select" value={form.medId || ""} onChange={e => f("medId", e.target.value)}>
+                        <option value="">— Choose medication —</option>
+                        {activeMeds.map(m => (
+                          <option key={m.id} value={m.id}>{m.name} {m.dosage} · {m.scheduledTime}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className="form-group">
+                    <label className="form-label">Status <span className="required">*</span></label>
+                    <select className="form-select" value={form.medStatus || "Taken"} onChange={e => f("medStatus", e.target.value)}>
+                      <option>Taken</option>
+                      <option>Not Taken</option>
+                      <option>Skipped</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Notes</label>
+                    <textarea className="form-textarea" placeholder="Any observations about this medication..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
+                  </div>
+                </>
+              )}
 
-              {/* SYMPTOMS */}
-              <div className="form-group">
+              {/* MOOD */}
+              {careType === "Mood" && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Mood <span className="required">*</span></label>
+                    <select className="form-select" value={form.mood || ""} onChange={e => f("mood", e.target.value)}>
+                      <option value="">— Select mood —</option>
+                      {MOODS.map(m => <option key={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Observation / Notes</label>
+                    <textarea className="form-textarea" placeholder="Describe the patient's mood or behaviour..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
+                  </div>
+                </>
+              )}
 
-                <label className="form-label">
-                  Symptoms
-                </label>
+              {/* SYMPTOM */}
+              {careType === "Symptom" && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Symptom <span className="required">*</span></label>
+                    <input className="form-input" placeholder="e.g. Dizziness, headache, confusion" value={form.symptom || ""} onChange={e => f("symptom", e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Severity</label>
+                    <select className="form-select" value={form.severity || "Mild"} onChange={e => f("severity", e.target.value)}>
+                      {SEVERITIES.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Notes</label>
+                    <textarea className="form-textarea" placeholder="Describe in detail..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
+                  </div>
+                </>
+              )}
 
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder="Example: Headache, fatigue, nausea"
-                  value={symptoms}
-                  onChange={(e) => setSymptoms(e.target.value)}
-                />
+              {/* GENERAL NOTE */}
+              {careType === "General Note" && (
+                <div className="form-group">
+                  <label className="form-label">Note <span className="required">*</span></label>
+                  <textarea className="form-textarea" style={{ minHeight: 100 }} placeholder="Write your observation or note..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
+                </div>
+              )}
 
-              </div>
-
-              {/* NOTES */}
-              <div className="form-group">
-
-                <label className="form-label">
-                  Notes
-                </label>
-
-                <textarea
-                  className="form-textarea"
-                  placeholder="Add any additional observation..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-
-              </div>
-
-              <button
-                className="add-button"
-                type="submit"
-              >
+              <button className="add-button" type="submit">
                 + Add Care Log
               </button>
 
@@ -701,34 +764,13 @@ export default function DailyCare() {
             {/* SUMMARY */}
             <div className="summary-row">
 
-              {[
-                "Food",
-                "Water",
-                "Sleep",
-                "Medication",
-                "Mood",
-              ].map((type) => {
-
-                const count = logs.filter(
-                  (log) => log.type === type
-                ).length;
-
+              {CARE_TYPES.map((type) => {
+                const count = currentLogs.filter(log => log.type === type).length;
                 return (
-                  <div
-                    className="summary-box"
-                    key={type}
-                  >
-                    <div className="summary-icon">
-                      {getIcon(type)}
-                    </div>
-
-                    <div className="summary-number">
-                      {count}
-                    </div>
-
-                    <div className="summary-label">
-                      {type}
-                    </div>
+                  <div className="summary-box" key={type}>
+                    <div className="summary-icon">{getIcon(type)}</div>
+                    <div className="summary-number">{count}</div>
+                    <div className="summary-label" style={{ fontSize: 10 }}>{type}</div>
                   </div>
                 );
               })}
@@ -751,71 +793,44 @@ export default function DailyCare() {
                 </div>
 
                 <div className="logs-count">
-                  {logs.length} entries
+                  {currentLogs.length} entries
                 </div>
 
               </div>
 
-              {logs.length === 0 ? (
-
-                <div className="empty-state">
-                  No care logs available for today.
-                </div>
-
+              {currentLogs.length === 0 ? (
+                <div className="empty-state">No care logs recorded yet for today.</div>
               ) : (
-
-                logs.map((log) => (
-
-                  <div
-                    className="log-item"
-                    key={log.id}
-                  >
-
-                    {/* TIME */}
-                    <div className="log-time">
-                      {log.time}
+                currentLogs.map((log) => {
+                  const badge = getLogBadge(log);
+                  return (
+                    <div className="log-item" key={log.id}>
+                      <div className="log-time">{log.time}</div>
+                      <div className="log-icon">{getIcon(log.type)}</div>
+                      <div className="log-main">
+                        <div className="log-type">{log.type}</div>
+                        <div className="log-title" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          {getLogTitle(log)}
+                          {badge && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: badge.color, background: badge.bg, borderRadius: 20, padding: "2px 8px" }}>
+                              {badge.text}
+                            </span>
+                          )}
+                        </div>
+                        {log.type === "Medication" && log.scheduledTime && (
+                          <div className="log-quantity">Scheduled: {log.scheduledTime}</div>
+                        )}
+                        {log.type === "Sleep" && (
+                          <div className="log-quantity">{log.hours}h {log.minutes}m{log.wakeTime ? ` · Wake: ${log.wakeTime}` : ""}</div>
+                        )}
+                        {log.notes ? (
+                          <div className="log-details">{log.notes}</div>
+                        ) : null}
+                        <div className="log-added">Added by <strong>{log.addedBy}</strong></div>
+                      </div>
                     </div>
-
-                    {/* ICON */}
-                    <div className="log-icon">
-                      {getIcon(log.type)}
-                    </div>
-
-                    {/* DETAILS */}
-                    <div className="log-main">
-
-                      <div className="log-type">
-                        {log.type}
-                      </div>
-
-                      <div className="log-title">
-                        {log.type} Logged
-                      </div>
-
-                      <div className="log-quantity">
-                        {log.quantity}
-                      </div>
-
-                      <div className="log-details">
-                        <strong>Symptoms:</strong>{" "}
-                        {log.symptoms}
-                        <br />
-                        <br />
-                        <strong>Notes:</strong>{" "}
-                        {log.notes}
-                      </div>
-
-                      <div className="log-added">
-                        Added by{" "}
-                        <strong>{log.addedBy}</strong>
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                ))
-
+                  );
+                })
               )}
 
             </div>

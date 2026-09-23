@@ -1,15 +1,71 @@
+/* =========================================
+   DESIGN TOKENS — "Woven Threads"
+   Every caregiver is a distinct color, used consistently everywhere
+   they appear. The app's warmth comes from paper-cream surfaces and a
+   serif display face, not from indigo-on-white SaaS defaults.
+========================================= */
+
 :root {
-  --primary: #5b5bd6;
+  /* ---------- Core palette (existing variable names kept so Sidebar/
+     Navbar/shell — which already reference these — re-theme for free) --- */
+  --primary: #be5b2e;         /* terracotta — actions, active states */
+  --primary-dark: #9c4a24;
+  --primary-soft: #fbeae0;
 
-  --background: #f8f9fc;
+  --background: #faf6ef;      /* warm cream page background */
   --surface: #ffffff;
+  --surface-warm: #fffcf7;
 
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
+  --text-primary: #2b2620;    /* warm ink, not pure black */
+  --text-secondary: #6e6555;
+  --text-faint: #9c927d;
 
-  --border: #e5e7eb;
+  --border: #e8e0d0;
+  --border-strong: #d8cdb5;
 
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  --success: #3f7d5c;
+  --success-bg: #e8f3ec;
+  --warning: #b4842a;
+  --warning-bg: #fbf1de;
+  --danger: #b34a42;
+  --danger-bg: #faeae8;
+
+  /* ---------- Typography ---------- */
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-body: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* ---------- Spacing scale ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* ---------- Radius ---------- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 999px;
+
+  /* ---------- Shadow ---------- */
+  --shadow-sm: 0 1px 2px rgba(43, 38, 32, 0.06);
+  --shadow-md: 0 4px 16px rgba(43, 38, 32, 0.08);
+  --shadow-lg: 0 12px 32px rgba(43, 38, 32, 0.14);
+
+  /* ---------- Caregiver thread palette ----------
+     Mirrors src/lib/caregiverColors.js — keep in sync if you change one. */
+  --thread-plum: #5b4b8a;
+  --thread-plum-bg: #efeaf9;
+  --thread-terracotta: #be5b2e;
+  --thread-terracotta-bg: #fbeae0;
+  --thread-teal: #3f7d6b;
+  --thread-teal-bg: #e7f2ed;
+  --thread-gold: #b4842a;
+  --thread-gold-bg: #fbf1de;
+  --thread-rose: #a24e63;
+  --thread-rose-bg: #f8eaee;
+  --thread-slate: #4c6b8a;
+  --thread-slate-bg: #e9eff5;
 }

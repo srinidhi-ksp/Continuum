@@ -1,384 +1,229 @@
-import {
-  ArrowRight,
-  Bell,
-  Check,
-  Clock3,
-  Pill,
-  Utensils,
-  Moon,
-  Sparkles,
-  Users,
-  AlertTriangle,
-} from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
+import { usePatient } from "../context/PatientContext";
+import { threadColorFor, initialFor } from "../lib/caregiverColors";
+import { careLogTitle } from "../lib/mappers";
+
+function greetingForNow() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function CaregiverThread({ caregiver }) {
+  const color = threadColorFor(caregiver.id);
+  return (
+    <div
+      className="wt-caregiver-chip"
+      style={{ background: color.bg, color: color.text }}
+      title={`${caregiver.name}${caregiver.role ? ` · ${caregiver.role}` : ""}`}
+    >
+      {initialFor(caregiver.name)}
+    </div>
+  );
+}
 
 function Dashboard() {
+  const { currentPatient, careCircle, coordinationMetric, currentLogs, todaysReminders, isDetailLoading } =
+    usePatient();
+
+  // MainLayout already blocks rendering until a patient exists — this is
+  // just a defensive fallback, not the real empty-state UI.
+  if (!currentPatient) return null;
+
+  const score = coordinationMetric?.score ?? null;
+  const riskLevel = coordinationMetric?.risk_level ?? null;
+  const recommendation =
+    coordinationMetric?.recommendation ??
+    "No coordination insight yet — check back once today's activity is logged.";
+
+  const completed = todaysReminders.filter((r) => r.status === "completed").length;
+  const upcoming = todaysReminders.filter((r) => r.status === "upcoming").length;
+  const missed = todaysReminders.filter((r) => r.status === "missed").length;
+
+  const recentActivity = currentLogs.slice(0, 4);
+  const firstName = currentPatient.name.split(" ")[0];
+
   return (
-    <div className="dashboard">
-
-      {/* Header */}
-      <div className="dashboard-header">
+    <div className="wt-dashboard">
+      {/* ---------- Greeting ---------- */}
+      <div className="wt-greeting">
         <div>
-          <h1>Good evening, Srinidhi 👋</h1>
-          <p>Here's your care overview for today.</p>
+          <p className="wt-eyebrow">Care overview</p>
+          <h1 className="wt-greeting__title">{greetingForNow()}, Srinidhi</h1>
+          <p className="wt-greeting__sub">
+            Here's how {firstName}'s care is woven together today.
+          </p>
         </div>
-
-        <button className="view-timeline-btn">
-          View Timeline
-          <ArrowRight size={17} />
-        </button>
+        <Link to="/timeline" className="wt-btn wt-btn--ghost">
+          View timeline <ArrowRight size={16} />
+        </Link>
       </div>
 
-
-      {/* Patient Overview */}
-      <section className="patient-overview dashboard-card">
-
-        <div className="patient-info">
-
-          <div className="patient-avatar">
-            L
-          </div>
-
+      {/* ---------- Patient strip ---------- */}
+      <div className="wt-patient-strip">
+        <div className="wt-patient-strip__identity">
+          <div className="wt-patient-avatar">{initialFor(currentPatient.name)}</div>
           <div>
-            <span className="section-label">PATIENT</span>
-
-            <h2>Lakshmi Krishnan</h2>
-
-            <p>72 years · Dementia</p>
-
-            <div className="patient-status">
-              <span className="status-dot"></span>
-              Care circle active
-            </div>
-          </div>
-
-        </div>
-
-        <div className="patient-meta">
-
-          <div>
-            <span>CAREGIVERS</span>
-            <strong>
-              <Users size={16} />
-              3
-            </strong>
-          </div>
-
-          <div>
-            <span>LAST ACTIVITY</span>
-            <strong>
-              <Clock3 size={16} />
-              8 min ago
-            </strong>
-          </div>
-
-        </div>
-
-        <button className="profile-link">
-          View Profile
-          <ArrowRight size={16} />
-        </button>
-
-      </section>
-
-
-      {/* Top Statistics */}
-      <section className="dashboard-stats">
-
-        {/* Reminders */}
-        <div className="dashboard-card stat-card">
-
-          <div className="stat-card-header">
-            <div className="stat-icon reminder-icon">
-              <Bell size={19} />
-            </div>
-
-            <span className="section-label">TODAY'S CARE</span>
-          </div>
-
-          <div className="stat-number">
-            3
-          </div>
-
-          <p>reminders remaining</p>
-
-          <div className="stat-footer">
-            <span className="success-text">
-              <Check size={14} />
-              2 completed
-            </span>
-
-            <span>1 upcoming</span>
-          </div>
-
-        </div>
-
-
-        {/* Care Score */}
-        <div className="dashboard-card score-card">
-
-          <div className="stat-card-header">
-            <div className="stat-icon score-icon">
-              <Sparkles size={19} />
-            </div>
-
-            <span className="section-label">
-              CARE COORDINATION
-            </span>
-          </div>
-
-          <div className="score-content">
-
-            <div>
-              <div className="score-number">
-                78<span>/100</span>
-              </div>
-
-              <div className="score-status">
-                <span className="status-dot"></span>
-                Moderate workload
-              </div>
-            </div>
-
-            <div className="score-circle">
-              <div className="score-circle-inner">
-                78
-              </div>
-            </div>
-
-          </div>
-
-          <p className="score-description">
-            Your care coordination looks manageable today.
-          </p>
-
-        </div>
-
-      </section>
-
-    
-      {/* Main Content */}
-      <section className="dashboard-main-grid">
-
-        {/* Recent Activity */}
-        <div className="dashboard-card activity-card">
-
-          <div className="card-heading">
-
-            <div>
-              <span className="section-label">RECENT ACTIVITY</span>
-              <h2>Timeline</h2>
-            </div>
-
-            <button className="text-button">
-              View all
-              <ArrowRight size={15} />
-            </button>
-
-          </div>
-
-
-          <div className="timeline-list">
-
-            {/* Medication */}
-            <div className="timeline-item">
-
-              <div className="timeline-icon medication">
-                <Pill size={18} />
-              </div>
-
-              <div className="timeline-content">
-                <h3>Medication taken</h3>
-                <p>Donepezil 10mg</p>
-                <span>Priya · 8:05 PM</span>
-              </div>
-
-              <div className="timeline-check">
-                <Check size={15} />
-              </div>
-
-            </div>
-
-
-            {/* Meal */}
-            <div className="timeline-item">
-
-              <div className="timeline-icon meal">
-                <Utensils size={18} />
-              </div>
-
-              <div className="timeline-content">
-                <h3>Dinner completed</h3>
-                <p>Meal logged successfully</p>
-                <span>Arun · 7:30 PM</span>
-              </div>
-
-            </div>
-
-
-            {/* Sleep */}
-            <div className="timeline-item">
-
-              <div className="timeline-icon sleep">
-                <Moon size={18} />
-              </div>
-
-              <div className="timeline-content">
-                <h3>Sleep logged</h3>
-                <p>7 hours 20 minutes</p>
-                <span>Priya · 7:10 AM</span>
-              </div>
-
-            </div>
-
-          </div>
-
-        </div>
-
-
-        {/* AI Insight */}
-        <div className="dashboard-card ai-card">
-
-          <div className="ai-header">
-
-            <div className="ai-icon">
-              <Sparkles size={20} />
-            </div>
-
-            <div>
-              <span className="section-label">AI INSIGHT</span>
-              <h2>Care Pattern</h2>
-            </div>
-
-          </div>
-
-
-          <div className="ai-content">
-
-            <p>
-              Your care activity has been consistent today.
-              Medication and meal entries were logged on time.
+            <p className="wt-eyebrow">Patient</p>
+            <h2>{currentPatient.name}</h2>
+            <p className="wt-patient-strip__meta">
+              {currentPatient.age} years · {currentPatient.condition}
             </p>
-
-            <div className="ai-highlight">
-              <Sparkles size={16} />
-
-              <span>
-                3 care activities completed
-              </span>
-            </div>
-
+            <span
+              className={`wt-status wt-status--${
+                currentPatient.status === "Attention" ? "attention" : "stable"
+              }`}
+            >
+              <span className="wt-status__dot" />
+              {currentPatient.careCircleActive ? "Care circle active" : "No active caregivers"}
+            </span>
           </div>
-
-
-          <button className="ai-action">
-            View activity summary
-            <ArrowRight size={16} />
-          </button>
-
         </div>
 
-      </section>
-
-
-      {/* Today's Reminders */}
-      <section className="dashboard-card reminders-card">
-
-        <div className="card-heading">
-
-          <div>
-            <span className="section-label">UPCOMING</span>
-            <h2>Today's reminders</h2>
+        <div className="wt-patient-strip__threads">
+          <p className="wt-eyebrow">Woven by</p>
+          <div className="wt-thread-stack">
+            {careCircle.length === 0 ? (
+              <span className="wt-patient-strip__meta">No caregivers yet</span>
+            ) : (
+              careCircle.map((c) => <CaregiverThread key={c.id} caregiver={c} />)
+            )}
           </div>
-
-          <button className="text-button">
-            View all
-            <ArrowRight size={15} />
-          </button>
-
-        </div>
-
-
-        <div className="reminder-list">
-
-          <div className="reminder-item">
-
-            <div className="reminder-icon-box">
-              <Pill size={18} />
-            </div>
-
-            <div className="reminder-info">
-              <h3>Donepezil</h3>
-              <p>Medication · 10mg</p>
-            </div>
-
-            <div className="reminder-time">
-              <span>8:00 PM</span>
-              <small>Upcoming</small>
-            </div>
-
-          </div>
-
-
-          <div className="reminder-item completed">
-
-            <div className="reminder-icon-box">
-              <Check size={18} />
-            </div>
-
-            <div className="reminder-info">
-              <h3>Lunch</h3>
-              <p>Meal · Completed</p>
-            </div>
-
-            <div className="reminder-time">
-              <span>1:00 PM</span>
-              <small>Completed</small>
-            </div>
-
-          </div>
-
-
-          <div className="reminder-item">
-
-            <div className="reminder-icon-box">
-              <Clock3 size={18} />
-            </div>
-
-            <div className="reminder-info">
-              <h3>Evening walk</h3>
-              <p>Mobility · 15 minutes</p>
-            </div>
-
-            <div className="reminder-time">
-              <span>6:30 PM</span>
-              <small>Upcoming</small>
-            </div>
-
-          </div>
-
-        </div>
-
-      </section>
-
-
-      {/* Adaptive Dashboard Preview */}
-      <section className="adaptive-banner">
-
-        <div className="adaptive-icon">
-          <AlertTriangle size={20} />
-        </div>
-
-        <div>
-          <strong>Dashboard adapts when care workload increases</strong>
-
-          <p>
-            If coordination risk becomes elevated, CONTINUUM will
-            simplify this dashboard and prioritize tasks that need attention.
+          <p className="wt-patient-strip__meta">
+            {careCircle.length} caregiver{careCircle.length !== 1 ? "s" : ""}
           </p>
         </div>
 
-      </section>
+        <div className="wt-patient-strip__activity">
+          <p className="wt-eyebrow">Last activity</p>
+          <p className="wt-patient-strip__value">{currentPatient.lastActivity}</p>
+          <Link to="/patient" className="wt-link">
+            View profile <ArrowRight size={14} />
+          </Link>
+        </div>
+      </div>
 
+      {/* ---------- Today's care + coordination score ---------- */}
+      <div className="wt-grid">
+        <div className="wt-card">
+          <p className="wt-eyebrow">Today's care</p>
+          <p className="wt-card__big">{todaysReminders.length}</p>
+          <p className="wt-card__label">total tasks today</p>
+          <div className="wt-card__footer">
+            <span className="wt-pill wt-pill--success">{completed} completed</span>
+            {upcoming > 0 && <span className="wt-pill wt-pill--neutral">{upcoming} upcoming</span>}
+            {missed > 0 && <span className="wt-pill wt-pill--danger">{missed} missed</span>}
+          </div>
+        </div>
+
+        <div className={`wt-card wt-card--score wt-card--score-${riskLevel || "none"}`}>
+          <p className="wt-eyebrow">Care coordination</p>
+          {score !== null ? (
+            <>
+              <p className="wt-card__big">
+                <span>{score}</span>
+                <span className="wt-card__big-unit">/100</span>
+              </p>
+              {/* Decorative "thread" motif — not a chart of real history yet.
+                  Once coordination_metric has several days of rows per
+                  patient, swap this for a real sparkline of past scores. */}
+              <svg className="wt-pulseline" viewBox="0 0 220 32" preserveAspectRatio="none" aria-hidden="true">
+                <polyline
+                  points="0,20 24,20 34,6 44,28 56,14 70,20 110,20 122,8 134,26 148,16 160,20 220,20"
+                  fill="none"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <p className="wt-card__label wt-capitalize">{riskLevel} risk</p>
+              <p className="wt-card__note">{recommendation}</p>
+            </>
+          ) : (
+            <p className="wt-card__label">No coordination score yet today.</p>
+          )}
+        </div>
+      </div>
+
+      {/* ---------- Recent activity + today's reminders ---------- */}
+      <div className="wt-two-col">
+        <section className="wt-panel">
+          <div className="wt-panel__header">
+            <div>
+              <p className="wt-eyebrow">Recent activity</p>
+              <h3>Woven timeline</h3>
+            </div>
+            <Link to="/timeline" className="wt-link">
+              View all <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          {isDetailLoading && recentActivity.length === 0 ? (
+            <p className="wt-empty">Loading recent activity…</p>
+          ) : recentActivity.length === 0 ? (
+            <p className="wt-empty">Nothing logged yet today.</p>
+          ) : (
+            <ul className="wt-activity-list">
+              {recentActivity.map((log) => {
+                const color = threadColorFor(log.caregiver_id);
+                return (
+                  <li
+                    key={log.log_id}
+                    className="wt-activity-item"
+                    style={{ borderLeftColor: color.line }}
+                  >
+                    <div
+                      className="wt-activity-item__marker"
+                      style={{ background: color.bg, color: color.text }}
+                    >
+                      {initialFor(log.caregiver?.full_name)}
+                    </div>
+                    <div className="wt-activity-item__body">
+                      <p className="wt-activity-item__title">{careLogTitle(log)}</p>
+                      {log.notes && <p className="wt-activity-item__notes">{log.notes}</p>}
+                      <p className="wt-activity-item__meta">
+                        {log.caregiver?.full_name || "Unknown"} ·{" "}
+                        {new Date(log.created_at).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className="wt-panel wt-panel--reminders">
+          <div className="wt-panel__header">
+            <div>
+              <p className="wt-eyebrow">Upcoming</p>
+              <h3>Today's reminders</h3>
+            </div>
+          </div>
+
+          {todaysReminders.length === 0 ? (
+            <p className="wt-empty">No medications scheduled today.</p>
+          ) : (
+            <ul className="wt-reminder-list">
+              {todaysReminders.map((r) => (
+                <li key={r.id} className={`wt-reminder wt-reminder--${r.status}`}>
+                  <span className="wt-reminder__time">{r.time}</span>
+                  <div className="wt-reminder__body">
+                    <p className="wt-reminder__title">{r.title}</p>
+                    <p className="wt-reminder__subtitle">{r.subtitle}</p>
+                  </div>
+                  <span className="wt-reminder__status">{r.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

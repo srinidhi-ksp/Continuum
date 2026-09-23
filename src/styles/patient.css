@@ -1,0 +1,329 @@
+/* =========================================
+   PATIENT PAGE — "Woven Threads"
+   Shared modal/form/button/badge/status primitives live in global.css;
+   everything here is specific to the patient list + profile.
+========================================= */
+
+.wt-patient-page {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.wt-patient-avatar--card {
+  width: 44px;
+  height: 44px;
+  font-size: 17px;
+}
+
+.wt-patient-avatar--lg {
+  width: 64px;
+  height: 64px;
+  font-size: 24px;
+}
+
+
+.wt-patient-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.wt-patient-page__header h1 {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.wt-patient-page__header p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+
+/* ---------- Toolbar ---------- */
+
+.wt-patient-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.wt-search {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+}
+
+.wt-search span {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+}
+
+.wt-search input {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  padding: 10px 14px 10px 38px;
+  font-size: 13px;
+  outline: none;
+  background: var(--surface);
+}
+
+.wt-search input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.wt-patient-count {
+  font-size: 13px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+
+/* ---------- Card grid ---------- */
+
+.wt-patient-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--space-5);
+}
+
+.wt-patient-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.wt-patient-card--current {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary), var(--shadow-sm);
+}
+
+.wt-patient-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.wt-patient-card__identity {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.wt-patient-card__identity h2 {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.wt-patient-card__meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.wt-patient-card__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.wt-patient-card__stat {
+  background: var(--background);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.wt-patient-card__stat span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-bottom: 2px;
+}
+
+.wt-patient-card__stat strong {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.wt-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wt-progress__label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.wt-progress__track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--border);
+  overflow: hidden;
+}
+
+.wt-progress__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+
+.wt-patient-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.wt-patient-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.wt-btn--sm {
+  padding: 6px 14px;
+  font-size: 12px;
+}
+
+
+/* ---------- Profile modal ---------- */
+
+.wt-profile-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.wt-profile-top h2 {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.wt-profile-top p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 2px 0 6px;
+}
+
+.wt-profile-section {
+  margin-bottom: var(--space-5);
+}
+
+.wt-profile-section h3 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: var(--space-3);
+}
+
+.wt-profile-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.wt-profile-info {
+  background: var(--background);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.wt-profile-info span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-bottom: 2px;
+}
+
+.wt-profile-info strong {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.wt-care-plan-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.wt-care-plan-row:last-child {
+  border-bottom: none;
+}
+
+.wt-care-plan-row .wt-status-tag--completed { color: var(--success); }
+.wt-care-plan-row .wt-status-tag--missed { color: var(--danger); }
+.wt-care-plan-row .wt-status-tag--pending { color: var(--text-faint); }
+
+.wt-profile-note {
+  background: var(--background);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+
+/* ---------- Invite link box ---------- */
+
+.wt-invite-link {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--primary-dark);
+  margin-bottom: var(--space-4);
+  word-break: break-all;
+}
+
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 720px) {
+  .wt-form-grid,
+  .wt-profile-info-grid {
+    grid-template-columns: 1fr;
+  }
+  .wt-patient-grid {
+    grid-template-columns: 1fr;
+  }
+}
