@@ -4,7 +4,7 @@
 // raw supabase.from(...) calls through page components) when they get
 // their own passes.
 
-import { supabase, CURRENT_CAREGIVER_ID } from "./supabaseClient";
+import { supabase, getCaregiverId } from "./supabaseClient";
 
 function patientPayloadFromForm(form) {
   return {
@@ -20,11 +20,13 @@ function patientPayloadFromForm(form) {
 }
 
 // Creates the patient, links them to the current caregiver as "primary",
-// and adds their emergency contact if one was entered. All three matter
-// for the app to function (a patient with no caregiver link would be
-// invisible everywhere else), so this throws on the first failure rather
-// than silently leaving a half-created patient behind.
+// and adds their emergency contact if one was entered. The caregiverId
+// is resolved at call-time via getCaregiverId() so it always uses the
+// authenticated user's UUID — not the hardcoded module-level constant.
 export async function createPatient(form) {
+  const caregiverId = form.caregiverId || getCaregiverId();
+  if (!caregiverId) throw new Error("No authenticated caregiver ID available.");
+
   const { data: patientRow, error: patientError } = await supabase
     .from("patient")
     .insert(patientPayloadFromForm(form))
@@ -32,10 +34,33 @@ export async function createPatient(form) {
     .single();
   if (patientError) throw patientError;
 
-  const { error: linkError } = await supabase
-    .from("caregiver_pat")
-    .insert({ caregiver_id: CURRENT_CAREGIVER_ID, patient_id: patientRow.patient_id, role: "primary" });
-  if (linkError) throw linkError;
+  // Build the link payload with only the guaranteed base columns.
+  // The extended columns (relationship, status) are added by migration_v2.sql;
+  // if that migration hasn't been applied yet, we skip them gracefully.
+  const baseLinkPayload = {
+    caregiver_id: caregiverId,
+    patient_id: patientRow.patient_id,
+    role: "primary",
+    joining_at: new Date().toISOString(),
+  };
+
+  // Try with extended columns first; fall back to base-only if schema not migrated
+  let linkError;
+  ({ error: linkError } = await supabase.from("caregiver_pat").insert({
+    ...baseLinkPayload,
+    relationship: form.relationship || null,
+    status: "active",
+  }));
+
+  if (linkError) {
+    // If extended columns don't exist yet, retry with base columns only
+    const isColumnMissing = linkError.message?.includes("column") || linkError.message?.includes("schema");
+    if (isColumnMissing) {
+      console.warn("[patientApi] Extended columns not yet migrated — inserting base link only");
+      ({ error: linkError } = await supabase.from("caregiver_pat").insert(baseLinkPayload));
+    }
+    if (linkError) throw linkError;
+  }
 
   if (form.emergencyContact) {
     await upsertEmergencyContact(patientRow.patient_id, form);

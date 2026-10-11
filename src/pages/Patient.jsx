@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { usePatient } from "../context/PatientContext";
 import { createPatient, updatePatient } from "../lib/patientApi";
 import { initialFor } from "../lib/caregiverColors";
+import EmergencyContacts from "../components/EmergencyContacts";
 import "../styles/patient.css";
 
 const EMPTY_FORM = {
@@ -434,6 +435,8 @@ function Patient() {
               <h3>Care Notes</h3>
               <div className="wt-profile-note">{selectedPatient.notes}</div>
             </div>
+
+            <EmergencyContacts patientId={selectedPatient.id} />
 
             <div className="wt-modal-actions">
               <button className="wt-btn wt-btn--ghost" onClick={() => setSelectedPatient(null)}>

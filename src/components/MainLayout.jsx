@@ -1,6 +1,8 @@
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import { usePatient } from "../context/PatientContext";
+import { useAuth } from "../context/AuthContext";
+import OnboardingWizard from "./OnboardingWizard";
 
 function AppShellState({ isLoading, loadError, isEmpty, onRetry }) {
   if (isLoading) {
@@ -46,6 +48,8 @@ function AppShellState({ isLoading, loadError, isEmpty, onRetry }) {
 
 function MainLayout({ children }) {
   const { isLoading, loadError, patients, reloadPatients } = usePatient();
+  const { needsOnboarding } = useAuth();
+
   const isEmpty = !isLoading && !loadError && patients.length === 0;
   const showState = isLoading || loadError || isEmpty;
 
@@ -57,6 +61,8 @@ function MainLayout({ children }) {
         <Navbar />
 
         <main className="page-content">
+          {needsOnboarding && <OnboardingWizard />}
+
           {showState ? (
             <AppShellState
               isLoading={isLoading}

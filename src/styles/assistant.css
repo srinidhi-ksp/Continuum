@@ -1,0 +1,457 @@
+/* =========================================
+   ASSISTANT PAGE — Woven Threads extension
+========================================= */
+
+/* ── Page layout ──────────────────────────────────────────────────────── */
+.assistant-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 32px);
+  padding: var(--space-5);
+  gap: var(--space-4);
+  overflow: hidden;
+}
+
+/* ── Header bar ───────────────────────────────────────────────────────── */
+.assistant-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.assistant-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.assistant-header__avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--primary-soft);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.assistant-header__info h1 {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.assistant-header__info p {
+  font-size: 0.8rem;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.assistant-header__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.assistant-lang-select {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.assistant-tts-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.assistant-tts-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.assistant-tts-btn.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ── Patient context strip ────────────────────────────────────────────── */
+.assistant-context-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-warm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.assistant-context-strip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
+
+.assistant-context-strip strong {
+  color: var(--text-primary);
+}
+
+.assistant-context-strip__divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+
+/* ── Disclaimer ───────────────────────────────────────────────────────── */
+.assistant-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.assistant-disclaimer svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--warning);
+}
+
+/* ── Chat area ────────────────────────────────────────────────────────── */
+.assistant-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.assistant-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Welcome state ────────────────────────────────────────────────────── */
+.assistant-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-7) var(--space-5);
+  gap: var(--space-3);
+}
+
+.assistant-welcome__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: var(--primary-soft);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.assistant-welcome h2 {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.assistant-welcome p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  max-width: 420px;
+  margin: 0;
+}
+
+/* ── Suggested questions ──────────────────────────────────────────────── */
+.assistant-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+  margin-top: var(--space-2);
+}
+
+.assistant-chip {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.assistant-chip:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.assistant-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Message bubbles ──────────────────────────────────────────────────── */
+.assistant-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 78%;
+  gap: 4px;
+}
+
+.assistant-msg--user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.assistant-msg--ai {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.assistant-msg__bubble {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  line-height: 1.55;
+  font-size: 0.92rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.assistant-msg--user .assistant-msg__bubble {
+  background: var(--primary);
+  color: #fff;
+  border-bottom-right-radius: var(--space-1);
+}
+
+.assistant-msg--ai .assistant-msg__bubble {
+  background: var(--surface-warm);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: var(--space-1);
+}
+
+.assistant-msg--error .assistant-msg__bubble {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.assistant-msg__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.assistant-msg__actions {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: 2px;
+}
+
+.assistant-msg__action-btn {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+}
+.assistant-msg__action-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ── Typing indicator ─────────────────────────────────────────────────── */
+.assistant-typing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-warm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  border-bottom-left-radius: var(--space-1);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.assistant-typing__dots {
+  display: flex;
+  gap: 4px;
+}
+
+.assistant-typing__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  animation: assistant-bounce 1.4s ease-in-out infinite;
+}
+.assistant-typing__dot:nth-child(2) { animation-delay: 0.2s; }
+.assistant-typing__dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes assistant-bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+
+/* ── Input area ───────────────────────────────────────────────────────── */
+.assistant-input-area {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.assistant-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--background);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.assistant-input:focus {
+  border-color: var(--primary);
+}
+.assistant-input::placeholder {
+  color: var(--text-faint);
+}
+
+.assistant-mic-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.assistant-mic-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.assistant-mic-btn.listening {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  animation: assistant-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes assistant-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(179, 74, 66, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(179, 74, 66, 0); }
+}
+
+.assistant-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.assistant-send-btn:hover {
+  background: var(--primary-dark);
+}
+.assistant-send-btn:disabled {
+  background: var(--border);
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .assistant-page {
+    padding: var(--space-3);
+    height: calc(100vh - 16px);
+  }
+
+  .assistant-header {
+    gap: var(--space-2);
+  }
+
+  .assistant-msg {
+    max-width: 90%;
+  }
+
+  .assistant-suggestions {
+    justify-content: flex-start;
+  }
+
+  .assistant-chip {
+    font-size: 0.78rem;
+    padding: 6px 10px;
+  }
+
+  .assistant-context-strip {
+    font-size: 0.76rem;
+    padding: var(--space-2) var(--space-3);
+  }
+}

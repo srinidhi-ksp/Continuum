@@ -1,7 +1,4 @@
-// Fixtures mirror continuum_seed.sql exactly (same ids/values) so this
-// smoke test exercises the same two-patient, two-risk-level scenario the
-// real Supabase project has, not an imaginary one.
-
+// Fixtures mirror continuum_seed.sql exactly (same ids/values)
 export const CURRENT_CAREGIVER_ID = "11111111-1111-1111-1111-111111111101";
 
 export const caregivers = [
@@ -36,10 +33,10 @@ export let patients = [
 ];
 
 export let caregiverPat = [
-  { caregiver_id: "11111111-1111-1111-1111-111111111101", patient_id: "22222222-2222-2222-2222-222222222201", role: "primary", joining_at: "2026-05-20", removed_at: null },
-  { caregiver_id: "11111111-1111-1111-1111-111111111102", patient_id: "22222222-2222-2222-2222-222222222201", role: "family", joining_at: "2026-05-30", removed_at: null },
-  { caregiver_id: "11111111-1111-1111-1111-111111111103", patient_id: "22222222-2222-2222-2222-222222222201", role: "family", joining_at: "2026-05-30", removed_at: null },
-  { caregiver_id: "11111111-1111-1111-1111-111111111101", patient_id: "22222222-2222-2222-2222-222222222202", role: "primary", joining_at: "2026-06-19", removed_at: null },
+  { caregiver_id: "11111111-1111-1111-1111-111111111101", patient_id: "22222222-2222-2222-2222-222222222201", role: "primary", relationship: "Daughter", status: "active", alert_preference: "all", alert_priority: 1, assigned_responsibilities: ["Medication", "Meals"], joining_at: "2026-05-20", removed_at: null },
+  { caregiver_id: "11111111-1111-1111-1111-111111111102", patient_id: "22222222-2222-2222-2222-222222222201", role: "family", relationship: "Daughter", status: "active", alert_preference: "all", alert_priority: 2, assigned_responsibilities: ["Sleep"], joining_at: "2026-05-30", removed_at: null },
+  { caregiver_id: "11111111-1111-1111-1111-111111111103", patient_id: "22222222-2222-2222-2222-222222222201", role: "family", relationship: "Son", status: "active", alert_preference: "high_priority", alert_priority: 3, assigned_responsibilities: ["Symptoms"], joining_at: "2026-05-30", removed_at: null },
+  { caregiver_id: "11111111-1111-1111-1111-111111111101", patient_id: "22222222-2222-2222-2222-222222222202", role: "primary", relationship: "Spouse", status: "active", alert_preference: "all", alert_priority: 1, assigned_responsibilities: ["Medication"], joining_at: "2026-06-19", removed_at: null },
 ];
 
 export let emergencyContacts = [
@@ -64,12 +61,44 @@ export let dailyCareLogs = [
   { log_id: "99999999-9999-9999-9999-999999999902", patient_id: "22222222-2222-2222-2222-222222222201", caregiver_id: "11111111-1111-1111-1111-111111111102", type: "sleep", quantity: null, symptoms: null, notes: "Restful night.", sleep_hours: 7.3, created_at: new Date().toISOString() },
 ];
 
+export let timeEvents = [
+  { event_id: "66666666-6666-6666-6666-666666666601", patient_id: "22222222-2222-2222-2222-222222222201", caregiver_id: "11111111-1111-1111-1111-111111111102", title: "Medication taken", event_type: "medication", created_at: new Date().toISOString() },
+  { event_id: "66666666-6666-6666-6666-666666666602", patient_id: "22222222-2222-2222-2222-222222222201", caregiver_id: "11111111-1111-1111-1111-111111111103", title: "Dinner completed", event_type: "meal", created_at: new Date().toISOString() },
+];
+
+export let timelineComments = [
+  { commend_id: "77777777-7777-7777-7777-777777777701", event_id: "66666666-6666-6666-6666-666666666601", caregiver_id: "11111111-1111-1111-1111-111111111101", commend_text: "Confirmed with Priya — taken on time.", created_at: new Date().toISOString() },
+];
+
+export let careCircleInvites = [
+  { invite_id: "inv-100", patient_id: "22222222-2222-2222-2222-222222222201", invited_by: "11111111-1111-1111-1111-111111111101", email: "family@example.com", relationship: "Daughter", role: "family", token: "valid-test-token-123", status: "pending", created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString() },
+];
+
 export let coordinationMetrics = [
   { metric_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01", caregiver_id: "11111111-1111-1111-1111-111111111101", patient_id: "22222222-2222-2222-2222-222222222201", score: 78, risk_level: "moderate", recommendation: "Care coordination looks manageable today.", predicted_at: new Date().toISOString() },
   { metric_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb02", caregiver_id: "11111111-1111-1111-1111-111111111101", patient_id: "22222222-2222-2222-2222-222222222202", score: 42, risk_level: "elevated", recommendation: "Workload is elevated — consider redistributing tasks.", predicted_at: new Date().toISOString() },
 ];
 
-export function resetFixtures() {
-  // vitest re-imports the module fresh per test file by default, but this
-  // is here in case a test needs to reset mutated arrays (inserts) mid-file.
-}
+export let scenarioCards = [
+  { scenario_id: "dddddddd-dddd-dddd-dddd-dddddddddd01", patient_id: null, is_ai_generated: false, title: "Sundowning confusion", scenario_text: "Lakshmi becomes agitated at 6 PM. How do you respond?", difficulty: "medium", category: "dementia_care" },
+  { scenario_id: "dddddddd-dddd-dddd-dddd-dddddddddd02", patient_id: null, is_ai_generated: false, title: "Missed Levodopa dose", scenario_text: "Ramesh's 2pm dose was skipped. What do you do?", difficulty: "medium", category: "parkinson_care" },
+];
+
+
+export let scenarioOptions = [
+  { option_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee01", scenario_id: "dddddddd-dddd-dddd-dddd-dddddddddd01", option_text: "Calmly reassure and redirect", explanation: "Validation reduces distress.", is_correct: true },
+  { option_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee02", scenario_id: "dddddddd-dddd-dddd-dddd-dddddddddd01", option_text: "Firmly explain she is already home", explanation: "Contradiction increases agitation.", is_correct: false },
+  { option_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee03", scenario_id: "dddddddd-dddd-dddd-dddd-dddddddddd02", option_text: "Give the dose now and note the delay", explanation: "Give as soon as remembered; log it.", is_correct: true },
+];
+
+export let scenarioAttempts = [
+  { attempt_id: "ffffffff-ffff-ffff-ffff-ffffffffffff01", caregiver_id: "11111111-1111-1111-1111-111111111101", scenario_id: "dddddddd-dddd-dddd-dddd-dddddddddd01", option_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee01", is_correct: true, attempted_at: new Date().toISOString() },
+];
+
+export let healthReports = [
+  { report_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01", patient_id: "22222222-2222-2222-2222-222222222201", generated_by: "11111111-1111-1111-1111-111111111101", file_url: "https://example.com/report.pdf", generated_at: new Date().toISOString() },
+];
+
+export let appointments = [];
+
+export function resetFixtures() {}

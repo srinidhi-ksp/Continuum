@@ -1,6 +1,12 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { usePatient } from "../context/PatientContext";
-import { PlusCircle, Pill, CheckCircle, XCircle, Edit2, X } from "lucide-react";
+import {
+  createMedication,
+  updateMedication,
+  toggleMedicationActive,
+  logMedicationDose,
+} from "../lib/medicationApi";
+import { PlusCircle, Pill, CheckCircle, XCircle, Edit2, X, Check, AlertCircle } from "lucide-react";
 
 const EMPTY_MED = {
   name: "", brand: "", dosage: "", frequency: "Once daily",
@@ -13,11 +19,13 @@ const FREQUENCIES = [
 ];
 
 function Medications() {
-  const { currentPatient, currentMedications, setCurrentMedications } = usePatient();
+  const { currentPatient, currentMedications, reloadPatientDetail } = usePatient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null); // medication id being edited
   const [form, setForm] = useState(EMPTY_MED);
   const [filterActive, setFilterActive] = useState("all"); // all | active | inactive
+  const [submitting, setSubmitting] = useState(false);
+  const [logStatusMsg, setLogStatusMsg] = useState("");
 
   const activeMeds = currentMedications.filter(m => m.active);
   const inactiveMeds = currentMedications.filter(m => !m.active);
@@ -31,18 +39,56 @@ function Medications() {
   const closeForm = () => { setShowForm(false); setEditing(null); };
 
   const handleChange = (e) => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
-  const handleToggle = (id) =>
-    setCurrentMedications(prev => prev.map(m => m.id === id ? { ...m, active: !m.active } : m));
 
-  const handleSubmit = (e) => {
+  const handleToggle = async (id, currentActive) => {
+    try {
+      await toggleMedicationActive(id, !currentActive);
+      if (reloadPatientDetail) await reloadPatientDetail();
+    } catch (err) {
+      console.error("[Medications] Failed to toggle active status:", err);
+      alert("Failed to update medication status in Supabase.");
+    }
+  };
+
+  const handleMarkDose = async (med, status) => {
+    if (!currentPatient?.id) return;
+    try {
+      await logMedicationDose({
+        patientId: currentPatient.id,
+        medicationId: med.id,
+        medName: med.name,
+        medDosage: med.dosage,
+        status: status, // 'Taken' | 'Missed'
+      });
+      setLogStatusMsg(`Dose logged as ${status} for ${med.name}`);
+      setTimeout(() => setLogStatusMsg(""), 3000);
+      if (reloadPatientDetail) await reloadPatientDetail();
+    } catch (err) {
+      console.error("[Medications] Failed to log dose:", err);
+      alert("Failed to log dose: " + err.message);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name || !form.dosage) { alert("Medicine name and dosage are required."); return; }
-    if (editing) {
-      setCurrentMedications(prev => prev.map(m => m.id === editing ? { ...form, id: editing } : m));
-    } else {
-      setCurrentMedications(prev => [{ ...form, id: `m-${Date.now()}` }, ...prev]);
+    if (!currentPatient?.id) { alert("Please select a patient."); return; }
+
+    setSubmitting(true);
+    try {
+      if (editing) {
+        await updateMedication(editing, { ...form, patientId: currentPatient.id });
+      } else {
+        await createMedication({ ...form, patientId: currentPatient.id });
+      }
+      if (reloadPatientDetail) await reloadPatientDetail();
+      closeForm();
+    } catch (err) {
+      console.error("[Medications] Failed to save medication:", err);
+      alert("Failed to save medication: " + err.message);
+    } finally {
+      setSubmitting(false);
     }
-    closeForm();
   };
 
   const inputStyle = {
@@ -60,7 +106,7 @@ function Medications() {
         <div>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "#172033" }}>Medications</h1>
           <p style={{ margin: "6px 0 0", color: "#72798a", fontSize: 14 }}>
-            Managing medications for <strong>{currentPatient.name}</strong>
+            Managing medications for <strong>{currentPatient ? currentPatient.name : "Patient"}</strong>
           </p>
         </div>
         <button
@@ -70,6 +116,12 @@ function Medications() {
           <PlusCircle size={17} /> Add Medication
         </button>
       </div>
+
+      {logStatusMsg && (
+        <div style={{ background: "#e8f8f0", border: "1px solid #a3e635", color: "#166534", padding: "10px 16px", borderRadius: 10, marginBottom: 20, fontSize: 13, fontWeight: 600 }}>
+          {logStatusMsg}
+        </div>
+      )}
 
       {/* STATS ROW */}
       <div style={{ display: "flex", gap: 14, marginBottom: 24 }}>
@@ -134,12 +186,28 @@ function Medications() {
                     {med.brand && <div style={{ fontSize: 12, color: "#8a90a0", marginTop: 2 }}>Brand: {med.brand}</div>}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {med.active && (
+                    <>
+                      <button
+                        onClick={() => handleMarkDose(med, "Taken")}
+                        style={{ background: "#e8f8f0", border: "none", borderRadius: 8, padding: "7px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#1a9a5c" }}
+                      >
+                        <Check size={13} /> Mark Taken
+                      </button>
+                      <button
+                        onClick={() => handleMarkDose(med, "Missed")}
+                        style={{ background: "#fff5df", border: "none", borderRadius: 8, padding: "7px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#b97a18" }}
+                      >
+                        <AlertCircle size={13} /> Mark Missed
+                      </button>
+                    </>
+                  )}
                   <button onClick={() => openEdit(med)} style={{ background: "#f3f4f8", border: "none", borderRadius: 8, padding: "7px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#555b6d" }}>
                     <Edit2 size={13} /> Edit
                   </button>
                   <button
-                    onClick={() => handleToggle(med.id)}
+                    onClick={() => handleToggle(med.id, med.active)}
                     style={{ background: med.active ? "#fff3f3" : "#e8f8f0", border: "none", borderRadius: 8, padding: "7px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: med.active ? "#d45c5c" : "#1a9a5c" }}
                   >
                     {med.active ? <><XCircle size={13} /> Deactivate</> : <><CheckCircle size={13} /> Activate</>}
@@ -199,7 +267,7 @@ function Medications() {
                     <label style={labelStyle}>{f.label}</label>
                     <input
                       name={f.name} type={f.type || "text"}
-                      value={form[f.name]} onChange={handleChange}
+                      value={form[f.name] || ""} onChange={handleChange}
                       placeholder={f.placeholder}
                       style={inputStyle}
                     />
@@ -224,7 +292,7 @@ function Medications() {
                 <div style={{ gridColumn: "1 / -1" }}>
                   <label style={labelStyle}>Purpose / Description</label>
                   <textarea
-                    name="purpose" value={form.purpose} onChange={handleChange}
+                    name="purpose" value={form.purpose || ""} onChange={handleChange}
                     placeholder="Reason this medication is prescribed..."
                     style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
                   />
@@ -232,11 +300,11 @@ function Medications() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}>
-                <button type="button" onClick={closeForm} style={{ border: "1px solid #dedfe6", background: "white", color: "#656b7a", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <button type="button" onClick={closeForm} disabled={submitting} style={{ border: "1px solid #dedfe6", background: "white", color: "#656b7a", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   Cancel
                 </button>
-                <button type="submit" style={{ background: "#5b57d9", color: "white", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  {editing ? "Save Changes" : "Add Medication"}
+                <button type="submit" disabled={submitting} style={{ background: "#5b57d9", color: "white", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  {submitting ? "Saving..." : editing ? "Save Changes" : "Add Medication"}
                 </button>
               </div>
             </form>

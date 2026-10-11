@@ -7,6 +7,9 @@ import {
   UsersRound,
   Settings,
   Pill,
+  FileText,
+  BookOpen,
+  Bot
 } from "lucide-react";
 
 function Sidebar() {
@@ -43,6 +46,21 @@ function Sidebar() {
         <NavLink to="/timeline" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
           <Clock3 size={20} />
           <span>Timeline</span>
+        </NavLink>
+
+        <NavLink to="/reports" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
+          <FileText size={20} />
+          <span>Reports</span>
+        </NavLink>
+
+        <NavLink to="/learn" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
+          <BookOpen size={20} />
+          <span>Learn</span>
+        </NavLink>
+
+        <NavLink to="/assistant" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
+          <Bot size={20} />
+          <span>Assistant</span>
         </NavLink>
 
       </nav>

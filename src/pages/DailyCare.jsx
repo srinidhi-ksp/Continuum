@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import { usePatient } from "../context/PatientContext";
+import { createDailyCareLog } from "../lib/dailyCareApi";
 
 const CARE_TYPES = ["Food", "Water", "Sleep", "Medication", "Mood", "Symptom", "General Note"];
 
@@ -14,21 +15,26 @@ const FOOD_UNITS = ["pieces", "grams", "ml", "cups", "bowls", "plates"];
 const WATER_UNITS = ["ml", "glasses", "litres"];
 
 export default function DailyCare() {
-  const { currentPatient, currentMedications, currentLogs, setCurrentLogs } = usePatient();
+  const { currentPatient, currentMedications, currentLogs, setCurrentLogs, reloadPatientDetail } = usePatient();
   const [careType, setCareType] = useState("Food");
   const [form, setForm] = useState({});
+  const [submitting, setSubmitting] = useState(false);
 
-  // Reset form when care type changes
-  useEffect(() => { setForm({}); }, [careType]);
+  const handleCareTypeChange = (newType) => {
+    setCareType(newType);
+    setForm({});
+  };
 
   const activeMeds = currentMedications.filter(m => m.active);
 
   const f = (name, val) => setForm(p => ({ ...p, [name]: val }));
 
-  const handleAddLog = (e) => {
+  const handleAddLog = async (e) => {
     e.preventDefault();
+    if (!currentPatient?.id) { alert("Please select a patient."); return; }
+
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    let entry = { id: Date.now(), type: careType, time: now, addedBy: "You" };
+    let entry = { patientId: currentPatient.id, type: careType, time: now, addedBy: "You" };
 
     if (careType === "Food") {
       if (!form.foodItem) { alert("Please enter the food item."); return; }
@@ -54,8 +60,18 @@ export default function DailyCare() {
       entry = { ...entry, notes: form.notes };
     }
 
-    setCurrentLogs(prev => [entry, ...(prev || [])]);
-    setForm({});
+    setSubmitting(true);
+    try {
+      await createDailyCareLog(entry);
+      setCurrentLogs(prev => [{ ...entry, id: Date.now() }, ...(prev || [])]);
+      setForm({});
+      if (reloadPatientDetail) reloadPatientDetail();
+    } catch (err) {
+      console.error("[DailyCare] Failed to save care log:", err);
+      alert("Failed to save care log to Supabase: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const getLogTitle = (log) => {
@@ -596,7 +612,7 @@ export default function DailyCare() {
               {/* CARE TYPE */}
               <div className="form-group">
                 <label className="form-label">Care Type <span className="required">*</span></label>
-                <select className="form-select" value={careType} onChange={(e) => setCareType(e.target.value)}>
+                <select className="form-select" value={careType} onChange={(e) => handleCareTypeChange(e.target.value)}>
                   {CARE_TYPES.map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
@@ -751,8 +767,8 @@ export default function DailyCare() {
                 </div>
               )}
 
-              <button className="add-button" type="submit">
-                + Add Care Log
+              <button className="add-button" type="submit" disabled={submitting}>
+                {submitting ? "Saving..." : "+ Add Care Log"}
               </button>
 
             </form>

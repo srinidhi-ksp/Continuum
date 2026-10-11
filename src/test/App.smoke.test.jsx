@@ -17,10 +17,21 @@ vi.mock("../lib/supabaseClient", () => {
     medication_schedule: structuredClone(fixtures.medicationSchedules),
     daily_care_log: structuredClone(fixtures.dailyCareLogs),
     coordination_metric: structuredClone(fixtures.coordinationMetrics),
+    time_event: structuredClone(fixtures.timeEvents),
+    timeline_commend: structuredClone(fixtures.timelineComments),
+    care_circle_invite: structuredClone(fixtures.careCircleInvites),
+    scenario_card: structuredClone(fixtures.scenarioCards),
+    scenario_option: structuredClone(fixtures.scenarioOptions),
+    scenario_attempt: structuredClone(fixtures.scenarioAttempts),
+    health_report: structuredClone(fixtures.healthReports),
+    appointment: structuredClone(fixtures.appointments),
   });
+  let activeId = fixtures.CURRENT_CAREGIVER_ID;
   return {
     supabase: mock,
     CURRENT_CAREGIVER_ID: fixtures.CURRENT_CAREGIVER_ID,
+    getCaregiverId: () => activeId,
+    setCurrentCaregiverId: (id) => { if (id) activeId = id; },
   };
 });
 
@@ -39,11 +50,8 @@ describe("Dashboard + Patient integration", () => {
   it("loads the current patient's real data onto the Dashboard", async () => {
     await renderApp();
 
-    // Loading state first, then real content — proves the loading gate
-    // in MainLayout actually gates on the Supabase fetch, not just renders
-    // immediately.
-    expect(screen.getByText(/gathering the care circle/i)).toBeInTheDocument();
-
+    // RequireAuth renders null while session restores, then shows the Dashboard.
+    // Wait for the first patient name to confirm data loaded correctly.
     await waitFor(() => expect(screen.getByText("Lakshmi Krishnan")).toBeInTheDocument());
 
     // Coordination score for Lakshmi's fixture row is 78, moderate — this

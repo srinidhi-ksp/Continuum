@@ -1665,3 +1665,17 @@ select {
 
   line-height: 1.5;
 }
+
+/* =========================================
+   GENERIC PAGE WRAPPER (Batch 2)
+========================================= */
+
+.wt-page {
+  padding: var(--space-6);
+  max-width: 900px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+

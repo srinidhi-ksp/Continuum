@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -16,177 +16,17 @@ import {
   Stethoscope,
   Utensils,
 } from "lucide-react";
-
 import { useNavigate } from "react-router-dom";
 import { usePatient } from "../context/PatientContext";
-
-
-/* =====================================================
-   MOCK TIMELINE DATA
-===================================================== */
-
-const timelineData = {
-  "2026-08-18": [
-    {
-      time: "07:10 AM",
-      type: "Sleep",
-      icon: <Moon size={19} />,
-      iconClass: "sleep-icon",
-      title: "Sleep Logged",
-      description: "7 hours 20 minutes · Wake 07:10 AM",
-      caregiver: "Priya",
-      comments: [],
-    },
-    {
-      time: "08:00 AM",
-      type: "Food",
-      icon: <Utensils size={19} />,
-      iconClass: "food-icon",
-      title: "Breakfast Logged",
-      description: "2 idlis + milk",
-      caregiver: "Meera",
-      comments: [
-        {
-          name: "Meera",
-          text: "Breakfast was completed normally.",
-        },
-      ],
-    },
-    {
-      time: "08:15 AM",
-      type: "Medication",
-      icon: <Pill size={19} />,
-      iconClass: "medication-icon",
-      title: "Medicine Taken",
-      description: "Donepezil 5mg — Taken",
-      caregiver: "Arjun",
-      completed: true,
-      comments: [],
-    },
-    {
-      time: "11:00 AM",
-      type: "Symptom",
-      icon: <AlertCircle size={19} />,
-      iconClass: "symptom-icon",
-      title: "Symptom Observed",
-      description:
-        "Patient appeared confused and asked the same question repeatedly.",
-      caregiver: "Meera",
-      countedInPattern: true,
-      comments: [
-        {
-          name: "Meera",
-          text: "This happened twice today.",
-        },
-        {
-          name: "Arjun",
-          text: "I will mention this during tomorrow's doctor visit.",
-        },
-      ],
-    },
-    {
-      time: "02:30 PM",
-      type: "Mood",
-      icon: <Smile size={19} />,
-      iconClass: "mood-icon",
-      title: "Mood Observed",
-      description: "Calm and cheerful after afternoon indoor activities.",
-      caregiver: "Meera",
-      comments: [],
-    },
-    {
-      time: "06:00 PM",
-      type: "Appointment",
-      icon: <Stethoscope size={19} />,
-      iconClass: "appointment-icon",
-      title: "Appointment Reminder",
-      description:
-        "Neurology follow-up tomorrow at 10:30 AM.",
-      caregiver: "CONTINUUM",
-      isAutomated: true,
-      comments: [],
-    },
-  ],
-
-  "2026-08-17": [
-    {
-      time: "08:10 AM",
-      type: "Food",
-      icon: <Utensils size={19} />,
-      iconClass: "food-icon",
-      title: "Breakfast Logged",
-      description: "2 dosas + tea",
-      caregiver: "Meera",
-      comments: [],
-    },
-    {
-      time: "09:00 AM",
-      type: "Medication",
-      icon: <Pill size={19} />,
-      iconClass: "medication-icon",
-      title: "Medicine Taken",
-      description: "Donepezil 5mg — Taken",
-      caregiver: "Meera",
-      completed: true,
-      comments: [],
-    },
-    {
-      time: "01:00 PM",
-      type: "Food",
-      icon: <Utensils size={19} />,
-      iconClass: "food-icon",
-      title: "Lunch Logged",
-      description: "Rice, vegetables and curd",
-      caregiver: "Arjun",
-      comments: [],
-    },
-  ],
-
-  "2026-08-16": [
-    {
-      time: "08:30 AM",
-      type: "Medication",
-      icon: <Pill size={19} />,
-      iconClass: "medication-icon",
-      title: "Medicine Taken",
-      description: "Donepezil 5mg — Taken",
-      caregiver: "Arjun",
-      completed: true,
-      comments: [],
-    },
-    {
-      time: "02:00 PM",
-      type: "Symptom",
-      icon: <AlertCircle size={19} />,
-      iconClass: "symptom-icon",
-      title: "Mood Change Observed",
-      description:
-        "Patient appeared slightly restless during the afternoon.",
-      caregiver: "Meera",
-      countedInPattern: true,
-      comments: [
-        {
-          name: "Meera",
-          text: "She became calm after resting.",
-        },
-      ],
-    },
-  ],
-};
-
-
-/* =====================================================
-   DATE HELPERS
-===================================================== */
+import { fetchTimelineEvents, addTimelineComment } from "../lib/timelineApi";
 
 function formatDateForInput(date) {
   return date.toISOString().split("T")[0];
 }
 
-
 function formatDisplayDate(dateString) {
+  if (!dateString) return "";
   const date = new Date(`${dateString}T00:00:00`);
-
   return date.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "long",
@@ -194,19 +34,12 @@ function formatDisplayDate(dateString) {
   });
 }
 
-
 function formatDay(dateString) {
+  if (!dateString) return "";
   const today = formatDateForInput(new Date());
-
-  if (dateString === today) {
-    return "Today";
-  }
-
+  if (dateString === today) return "Today";
   const date = new Date(`${dateString}T00:00:00`);
-
-  return date.toLocaleDateString("en-IN", {
-    weekday: "long",
-  });
+  return date.toLocaleDateString("en-IN", { weekday: "long" });
 }
 
 function shiftDate(dateString, days) {
@@ -218,7 +51,6 @@ function shiftDate(dateString, days) {
   return `${year}-${month}-${day}`;
 }
 
-
 const FILTER_CATEGORIES = [
   "All",
   "Medication",
@@ -229,32 +61,68 @@ const FILTER_CATEGORIES = [
   "Appointments",
 ];
 
+const TYPE_ICONS = {
+  Food: <Utensils size={19} />,
+  Meal: <Utensils size={19} />,
+  Sleep: <Moon size={19} />,
+  Medication: <Pill size={19} />,
+  Mood: <Smile size={19} />,
+  Symptom: <AlertCircle size={19} />,
+  Appointment: <Stethoscope size={19} />,
+};
 
-/* =====================================================
-   TIMELINE PAGE
-===================================================== */
+const TYPE_CLASSES = {
+  Food: "food-icon",
+  Meal: "food-icon",
+  Sleep: "sleep-icon",
+  Medication: "medication-icon",
+  Mood: "mood-icon",
+  Symptom: "symptom-icon",
+  Appointment: "appointment-icon",
+};
 
 function Timeline() {
   const navigate = useNavigate();
   const { currentPatient } = usePatient();
-
   const dateInputRef = useRef(null);
 
-  const [selectedDate, setSelectedDate] = useState("2026-08-18");
+  const [selectedDate, setSelectedDate] = useState(formatDateForInput(new Date()));
   const [activeFilter, setActiveFilter] = useState("All");
+  const [allEvents, setAllEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Local mutable copy of timeline data so comments can be appended
-  const [events, setEvents] = useState(timelineData);
+  const loadEvents = useCallback(async () => {
+    if (!currentPatient?.id) return;
+    setLoading(true);
+    try {
+      const fetched = await fetchTimelineEvents(currentPatient.id);
+      setAllEvents(fetched);
+    } catch (err) {
+      console.error("[Timeline] Error fetching events:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPatient]);
 
-  const handleAddComment = (date, eventIndex, text) => {
-    setEvents((prev) => {
-      const dateCopy = (prev[date] || []).map((ev, i) =>
-        i === eventIndex
-          ? { ...ev, comments: [...ev.comments, { name: "Srinidhi", text }] }
-          : ev
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadEvents();
+  }, [loadEvents]);
+
+  const handleAddComment = async (eventId, text) => {
+    try {
+      const newComment = await addTimelineComment(eventId, text);
+      setAllEvents((prev) =>
+        prev.map((ev) =>
+          ev.id === eventId
+            ? { ...ev, comments: [...(ev.comments || []), newComment] }
+            : ev
+        )
       );
-      return { ...prev, [date]: dateCopy };
-    });
+    } catch (err) {
+      console.error("[Timeline] Failed to add comment:", err);
+      alert("Failed to add comment: " + err.message);
+    }
   };
 
   const openCalendar = () => {
@@ -267,41 +135,28 @@ function Timeline() {
     setSelectedDate(event.target.value);
   };
 
-  const handlePrevDay = () => {
-    setSelectedDate((prev) => shiftDate(prev, -1));
-  };
+  const handlePrevDay = () => setSelectedDate((prev) => shiftDate(prev, -1));
+  const handleNextDay = () => setSelectedDate((prev) => shiftDate(prev, 1));
 
-  const handleNextDay = () => {
-    setSelectedDate((prev) => shiftDate(prev, 1));
-  };
+  const rawEvents = allEvents.filter((ev) => ev.dateKey === selectedDate);
 
-  const handleViewPatient = () => {
-    navigate("/patient");
-  };
-
-  const rawEvents = (events[selectedDate] || []);
-
-  const filteredEvents = rawEvents
-    .map((event, originalIndex) => ({ ...event, _originalIndex: originalIndex }))
-    .filter((event) => {
-      if (activeFilter === "All") return true;
-      if (activeFilter === "Meals") return event.type === "Food" || event.type === "Meals";
-      if (activeFilter === "Symptoms") return event.type === "Symptom" || event.type === "Symptoms";
-      if (activeFilter === "Appointments") return event.type === "Appointment" || event.type === "Appointments";
-      return event.type === activeFilter;
-    });
-
+  const filteredEvents = rawEvents.filter((event) => {
+    if (activeFilter === "All") return true;
+    if (activeFilter === "Meals") return event.type === "Food" || event.type === "Meal";
+    if (activeFilter === "Symptoms") return event.type === "Symptom" || event.type === "Symptoms";
+    if (activeFilter === "Appointments") return event.type === "Appointment" || event.type === "Appointments";
+    return event.type === activeFilter;
+  });
 
   return (
     <div className="timeline-page">
-
       {/* PAGE HEADER */}
       <div className="timeline-page-header">
         <div>
           <span className="section-label">PATIENT TIMELINE</span>
           <h1>Care Timeline</h1>
           <p>
-            A shared chronological record of {currentPatient.name}'s care.
+            A shared chronological record of {currentPatient ? currentPatient.name : "Patient"}'s care.
           </p>
         </div>
 
@@ -330,7 +185,6 @@ function Timeline() {
             <ChevronRight size={16} />
           </button>
 
-          {/* Hidden native date picker */}
           <input
             ref={dateInputRef}
             type="date"
@@ -341,34 +195,30 @@ function Timeline() {
         </div>
       </div>
 
-
       {/* PATIENT BAR */}
-      <div className="timeline-patient-bar">
-        <div className="timeline-patient-left">
-          <div className="timeline-patient-avatar">
-            {currentPatient.name.charAt(0)}
-          </div>
-
-          <div>
-            <h2>{currentPatient.name}</h2>
-            <div className="timeline-patient-meta">
-              <span>{currentPatient.age} years</span>
-              <span className="meta-dot">•</span>
-              <span>{currentPatient.condition}</span>
-              <span className="timeline-active-status">
-                <span></span>
-                Care circle active
-              </span>
+      {currentPatient && (
+        <div className="timeline-patient-bar">
+          <div className="timeline-patient-left">
+            <div className="timeline-patient-avatar">{currentPatient.name.charAt(0)}</div>
+            <div>
+              <h2>{currentPatient.name}</h2>
+              <div className="timeline-patient-meta">
+                <span>{currentPatient.age} years</span>
+                <span className="meta-dot">•</span>
+                <span>{currentPatient.condition}</span>
+                <span className="timeline-active-status">
+                  <span></span>
+                  Care circle active
+                </span>
+              </div>
             </div>
           </div>
+
+          <button className="patient-link-button" onClick={() => navigate("/patient")}>
+            View Patient <ArrowRight size={15} />
+          </button>
         </div>
-
-        <button className="patient-link-button" onClick={handleViewPatient}>
-          View Patient
-          <ArrowRight size={15} />
-        </button>
-      </div>
-
+      )}
 
       {/* DATE HEADING */}
       <div className="timeline-date-heading">
@@ -379,7 +229,6 @@ function Timeline() {
         </div>
         <div className="timeline-date-line"></div>
       </div>
-
 
       {/* EVENT FILTER TABS */}
       <div
@@ -415,20 +264,24 @@ function Timeline() {
         })}
       </div>
 
-
       {/* TIMELINE EVENTS LIST */}
-      {filteredEvents.length > 0 ? (
+      {loading ? (
+        <div className="timeline-empty">
+          <p>Loading timeline events from Supabase…</p>
+        </div>
+      ) : filteredEvents.length > 0 ? (
         <div className="timeline-container">
           {filteredEvents.map((event) => (
             <TimelineEvent
-              key={`${selectedDate}-${event._originalIndex}`}
+              key={event.id}
               {...event}
-              onAddComment={(text) => handleAddComment(selectedDate, event._originalIndex, text)}
+              icon={TYPE_ICONS[event.type] || <Clock3 size={19} />}
+              iconClass={TYPE_CLASSES[event.type] || "sleep-icon"}
+              onAddComment={(text) => handleAddComment(event.id, text)}
             />
           ))}
         </div>
       ) : (
-        /* EMPTY STATE */
         <div className="timeline-empty">
           <div className="timeline-empty-icon">
             <Clock3 size={22} />
@@ -442,7 +295,6 @@ function Timeline() {
         </div>
       )}
 
-
       {/* TIMELINE PRINCIPLE */}
       <div className="timeline-principle">
         <div className="principle-icon">
@@ -451,20 +303,13 @@ function Timeline() {
         <div>
           <strong>One shared record of care</strong>
           <p>
-            Every care activity is recorded as a timeline event, keeping the entire
-            care circle informed without relying on separate conversations.
+            Every care activity is recorded as a timeline event, keeping the entire care circle informed without relying on separate conversations.
           </p>
         </div>
       </div>
-
     </div>
   );
 }
-
-
-/* =====================================================
-   TIMELINE EVENT COMPONENT
-===================================================== */
 
 function TimelineEvent({
   time,
@@ -494,20 +339,14 @@ function TimelineEvent({
 
   return (
     <div className="timeline-event">
-
-      {/* TIME */}
       <div className="timeline-event-time">{time}</div>
 
-      {/* MARKER */}
       <div className="timeline-marker-column">
         <div className={`timeline-event-icon ${iconClass}`}>{icon}</div>
         <div className="timeline-connector"></div>
       </div>
 
-      {/* EVENT CARD */}
       <div className="timeline-event-card">
-
-        {/* HEADER */}
         <div className="timeline-event-header">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -536,10 +375,8 @@ function TimelineEvent({
           </button>
         </div>
 
-        {/* DESCRIPTION */}
-        <p className="timeline-event-description">{description}</p>
+        {description && <p className="timeline-event-description">{description}</p>}
 
-        {/* PATTERN TAG (For missed meds, symptoms, etc.) */}
         {(countedInPattern || type === "Symptom") && (
           <div
             style={{
@@ -561,12 +398,9 @@ function TimelineEvent({
           </div>
         )}
 
-        {/* FOOTER */}
         <div className="timeline-event-footer">
           <div className="event-caregiver">
-            <div className="small-avatar">
-              {isSystem ? "C" : caregiver.charAt(0)}
-            </div>
+            <div className="small-avatar">{isSystem ? "C" : caregiver.charAt(0)}</div>
             <span>
               Added by <strong>{caregiver}</strong>
             </span>
@@ -575,12 +409,11 @@ function TimelineEvent({
           {completed && (
             <div className="event-completed">
               <Check size={13} />
-              Taken
+              Completed
             </div>
           )}
         </div>
 
-        {/* COMMENTS */}
         <div className={comments.length > 0 || commentOpen ? "event-comments" : undefined}>
           {comments.length > 0 && (
             <>
@@ -592,7 +425,7 @@ function TimelineEvent({
               </div>
 
               {comments.map((comment, index) => (
-                <div className="timeline-comment" key={index}>
+                <div className="timeline-comment" key={comment.id || index}>
                   <div className="comment-avatar">{comment.name.charAt(0)}</div>
                   <div className="comment-content">
                     <strong>{comment.name}</strong>
@@ -603,17 +436,21 @@ function TimelineEvent({
             </>
           )}
 
-          {/* Inline compose form */}
           {commentOpen ? (
             <div style={{ display: "flex", gap: 8, marginTop: comments.length > 0 ? 10 : 0, alignItems: "flex-start" }}>
-              <div className="comment-avatar" style={{ marginTop: 2 }}>S</div>
+              <div className="comment-avatar" style={{ marginTop: 2 }}>You</div>
               <div style={{ flex: 1 }}>
                 <textarea
                   autoFocus
                   rows={2}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit();
+                    }
+                  }}
                   placeholder="Add a comment…"
                   style={{
                     width: "100%",
@@ -647,7 +484,10 @@ function TimelineEvent({
                     Post
                   </button>
                   <button
-                    onClick={() => { setCommentOpen(false); setDraft(""); }}
+                    onClick={() => {
+                      setCommentOpen(false);
+                      setDraft("");
+                    }}
                     style={{
                       padding: "5px 10px",
                       fontSize: 11,
@@ -675,12 +515,9 @@ function TimelineEvent({
             </button>
           )}
         </div>
-
       </div>
-
     </div>
   );
 }
-
 
 export default Timeline;
