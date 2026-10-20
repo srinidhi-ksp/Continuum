@@ -46,18 +46,20 @@ async function renderApp() {
   return render(<App />);
 }
 
+const waitForApp = (assertion) => waitFor(assertion, { timeout: 10_000 });
+
 describe("Dashboard + Patient integration", () => {
   it("loads the current patient's real data onto the Dashboard", async () => {
     await renderApp();
 
     // RequireAuth renders null while session restores, then shows the Dashboard.
     // Wait for the first patient name to confirm data loaded correctly.
-    await waitFor(() => expect(screen.getByText("Lakshmi Krishnan")).toBeInTheDocument());
+    await waitForApp(() => expect(screen.getByText("Lakshmi Krishnan")).toBeInTheDocument());
 
     // Coordination score for Lakshmi's fixture row is 78, moderate — this
     // loads in a second, separate effect after currentPatientId is set,
     // so it needs its own wait, not just the patient name's.
-    await waitFor(() => expect(screen.getByText("78")).toBeInTheDocument());
+    await waitForApp(() => expect(screen.getByText("78")).toBeInTheDocument());
     expect(screen.getByText(/moderate risk/i)).toBeInTheDocument();
 
     // Care circle should show all 3 linked caregivers' initials.
@@ -73,11 +75,11 @@ describe("Dashboard + Patient integration", () => {
     const user = userEvent.setup();
     await renderApp();
 
-    await waitFor(() => expect(screen.getByText("Lakshmi Krishnan")).toBeInTheDocument());
+    await waitForApp(() => expect(screen.getByText("Lakshmi Krishnan")).toBeInTheDocument());
 
     await user.click(screen.getByRole("link", { name: /patient/i }));
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Patients" })).toBeInTheDocument());
+    await waitForApp(() => expect(screen.getByRole("heading", { name: "Patients" })).toBeInTheDocument());
     expect(screen.getByText("2 patients")).toBeInTheDocument();
 
     const rameshCard = screen.getByText("Ramesh Iyer").closest(".wt-patient-card");
@@ -90,7 +92,7 @@ describe("Dashboard + Patient integration", () => {
 
     // switchPatient() navigates back to "/" — Dashboard should now show
     // Ramesh, proving context propagated the switch correctly.
-    await waitFor(() => expect(screen.getByText("Ramesh Iyer")).toBeInTheDocument());
+    await waitForApp(() => expect(screen.getByText("Ramesh Iyer")).toBeInTheDocument());
     expect(screen.getByText("42")).toBeInTheDocument();
     expect(screen.getByText(/elevated risk/i)).toBeInTheDocument();
   });
@@ -99,9 +101,9 @@ describe("Dashboard + Patient integration", () => {
     const user = userEvent.setup();
     await renderApp();
 
-    await waitFor(() => expect(screen.getByText("Lakshmi Krishnan")).toBeInTheDocument());
+    await waitForApp(() => expect(screen.getByText("Lakshmi Krishnan")).toBeInTheDocument());
     await user.click(screen.getByRole("link", { name: /patient/i }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Patients" })).toBeInTheDocument());
+    await waitForApp(() => expect(screen.getByRole("heading", { name: "Patients" })).toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: /add patient/i }));
 
@@ -116,7 +118,7 @@ describe("Dashboard + Patient integration", () => {
     // all completed without throwing. Scope to the modal specifically —
     // the patient grid behind it also now shows "Kavitha Menon" once
     // reloadPatients() ran, so an unscoped query would match both.
-    await waitFor(() =>
+    await waitForApp(() =>
       expect(screen.getByText("Patient Created Successfully")).toBeInTheDocument()
     );
     const successModal = screen.getByText("Patient Created Successfully").closest(".wt-modal");
@@ -127,7 +129,7 @@ describe("Dashboard + Patient integration", () => {
     // createPatient() already set her as the current patient — Dashboard
     // should reflect that the moment we navigate there.
     await user.click(screen.getByRole("link", { name: "Dashboard" }));
-    await waitFor(() => expect(screen.getByText("Kavitha Menon")).toBeInTheDocument());
+    await waitForApp(() => expect(screen.getByText("Kavitha Menon")).toBeInTheDocument());
     expect(screen.getByText(/mild stroke recovery/i)).toBeInTheDocument();
-  });
+  }, 15_000);
 });

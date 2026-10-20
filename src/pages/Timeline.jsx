@@ -253,7 +253,7 @@ function Timeline() {
                 fontWeight: 600,
                 cursor: "pointer",
                 border: "none",
-                background: isActive ? "#5b57d9" : "#eeeff4",
+                background: isActive ? "var(--primary)" : "var(--background)",
                 color: isActive ? "#ffffff" : "#555b6d",
                 transition: "all 0.15s ease",
               }}
@@ -387,8 +387,8 @@ function TimelineEvent({
               marginBottom: 8,
               fontSize: 11,
               fontWeight: 600,
-              color: "#5b57d9",
-              background: "#eeedff",
+              color: "var(--primary)",
+              background: "var(--primary-soft)",
               borderRadius: 6,
               padding: "3px 8px",
             }}
@@ -474,7 +474,7 @@ function TimelineEvent({
                       padding: "5px 12px",
                       fontSize: 11,
                       fontWeight: 600,
-                      background: "#5b57d9",
+                      background: "var(--primary)",
                       color: "white",
                       border: "none",
                       borderRadius: 7,

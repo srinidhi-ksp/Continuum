@@ -77,7 +77,7 @@ export default function AuthModal({ isOpen, onClose }) {
         {/* Header */}
         <div
           style={{
-            background: "linear-gradient(135deg, #5b57d9 0%, #3c38b0 100%)",
+            background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
             color: "white",
             padding: "24px 28px",
             textAlign: "center",
@@ -104,8 +104,8 @@ export default function AuthModal({ isOpen, onClose }) {
               background: "white",
               fontSize: 14,
               fontWeight: 600,
-              color: tab === "login" ? "#5b57d9" : "#64748b",
-              borderBottom: `2px solid ${tab === "login" ? "#5b57d9" : "transparent"}`,
+              color: tab === "login" ? "var(--primary)" : "#64748b",
+              borderBottom: `2px solid ${tab === "login" ? "var(--primary)" : "transparent"}`,
               cursor: "pointer",
             }}
           >
@@ -121,8 +121,8 @@ export default function AuthModal({ isOpen, onClose }) {
               background: "white",
               fontSize: 14,
               fontWeight: 600,
-              color: tab === "register" ? "#5b57d9" : "#64748b",
-              borderBottom: `2px solid ${tab === "register" ? "#5b57d9" : "transparent"}`,
+              color: tab === "register" ? "var(--primary)" : "#64748b",
+              borderBottom: `2px solid ${tab === "register" ? "var(--primary)" : "transparent"}`,
               cursor: "pointer",
             }}
           >
@@ -239,7 +239,7 @@ export default function AuthModal({ isOpen, onClose }) {
               width: "100%",
               padding: "12px",
               borderRadius: 10,
-              background: "#5b57d9",
+              background: "var(--primary)",
               color: "white",
               border: "none",
               fontWeight: 600,

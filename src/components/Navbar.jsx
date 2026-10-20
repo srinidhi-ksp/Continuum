@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Bell, Search, LogOut, LogIn } from "lucide-react";
+import { Search, LogOut, LogIn } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AuthModal from "./AuthModal";
+import GlobalSearch from "./GlobalSearch";
+import NotificationCenter from "./NotificationCenter";
 
 const ROUTE_TITLES = {
   "/": "Dashboard",
@@ -11,6 +13,9 @@ const ROUTE_TITLES = {
   "/medications": "Medications",
   "/timeline": "Timeline",
   "/care-circle": "Care Circle",
+  "/learn": "Learn",
+  "/assistant": "Assistant",
+  "/reports": "Reports",
   "/settings": "Settings",
 };
 
@@ -18,8 +23,9 @@ function Navbar() {
   const { pathname } = useLocation();
   const pageTitle = ROUTE_TITLES[pathname] ?? "Dashboard";
 
-  const { caregiverProfile, isAuthenticated, logout } = useAuth();
+  const { caregiverProfile, isAuthenticated, logout, user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   const name = caregiverProfile?.full_name || "Srinidhi";
   const initial = name.charAt(0).toUpperCase();
@@ -31,13 +37,16 @@ function Navbar() {
       </div>
 
       <div className="navbar-right">
-        <button className="icon-button" title="Search">
+        <button
+          className="icon-button"
+          title="Search"
+          aria-label="Search patients and care records"
+          onClick={() => setShowSearch(true)}
+        >
           <Search size={19} />
         </button>
 
-        <button className="icon-button" title="Notifications">
-          <Bell size={19} />
-        </button>
+        <NotificationCenter key={user?.id || "signed-out"} />
 
         <div className="profile">
           <div className="profile-avatar">{initial}</div>
@@ -69,6 +78,7 @@ function Navbar() {
       </div>
 
       <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
+      {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
     </header>
   );
 }

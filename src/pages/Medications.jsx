@@ -99,19 +99,19 @@ function Medications() {
   const labelStyle = { fontSize: 12, fontWeight: 600, color: "#555b6d", display: "block", marginBottom: 5 };
 
   return (
-    <div style={{ padding: 32, minHeight: "100%", background: "#f7f8fc", fontFamily: "Inter, Arial, sans-serif", boxSizing: "border-box" }}>
+    <div style={{ minHeight: "100%", fontFamily: "var(--font-body)", boxSizing: "border-box" }}>
 
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "#172033" }}>Medications</h1>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-display)" }}>Medications</h1>
           <p style={{ margin: "6px 0 0", color: "#72798a", fontSize: 14 }}>
             Managing medications for <strong>{currentPatient ? currentPatient.name : "Patient"}</strong>
           </p>
         </div>
         <button
           onClick={openAdd}
-          style={{ display: "flex", alignItems: "center", gap: 7, background: "#5b57d9", color: "white", border: "none", borderRadius: 10, padding: "11px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+          style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--primary)", color: "white", border: "none", borderRadius: 10, padding: "11px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
         >
           <PlusCircle size={17} /> Add Medication
         </button>
@@ -124,9 +124,9 @@ function Medications() {
       )}
 
       {/* STATS ROW */}
-      <div style={{ display: "flex", gap: 14, marginBottom: 24 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 24 }}>
         {[
-          { label: "Total", count: currentMedications.length, color: "#5b57d9", bg: "#eeedff" },
+          { label: "Total", count: currentMedications.length, color: "var(--primary)", bg: "var(--primary-soft)" },
           { label: "Active", count: activeMeds.length, color: "#1a9a5c", bg: "#e8f8f0" },
           { label: "Inactive", count: inactiveMeds.length, color: "#777e8e", bg: "#f0f1f5" },
         ].map(s => (
@@ -145,7 +145,7 @@ function Medications() {
             onClick={() => setFilterActive(f)}
             style={{
               padding: "7px 16px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none",
-              background: filterActive === f ? "#5b57d9" : "#eeeff4",
+              background: filterActive === f ? "var(--primary)" : "var(--background)",
               color: filterActive === f ? "white" : "#555b6d",
             }}
           >
@@ -172,13 +172,13 @@ function Medications() {
                 <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                   <div style={{
                     width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center",
-                    background: med.active ? "#eeedff" : "#f0f1f5", flexShrink: 0,
+                    background: med.active ? "var(--primary-soft)" : "#f0f1f5", flexShrink: 0,
                   }}>
-                    <Pill size={20} color={med.active ? "#5b57d9" : "#9199a8"} />
+                    <Pill size={20} color={med.active ? "var(--primary)" : "#9199a8"} />
                   </div>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#172033" }}>{med.name}</h3>
+                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>{med.name}</h3>
                       <span style={{ fontSize: 11, fontWeight: 700, color: med.active ? "#1a9a5c" : "#777e8e", background: med.active ? "#e8f8f0" : "#eceef3", borderRadius: 20, padding: "2px 8px" }}>
                         {med.active ? "Active" : "Inactive"}
                       </span>
@@ -224,7 +224,7 @@ function Medications() {
                 ].map(item => (
                   <div key={item.label} style={{ background: "#f8f9fc", borderRadius: 9, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#8a90a0", letterSpacing: "0.5px", marginBottom: 4 }}>{item.label}</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#172033" }}>{item.value}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{item.value}</div>
                   </div>
                 ))}
               </div>
@@ -303,7 +303,7 @@ function Medications() {
                 <button type="button" onClick={closeForm} disabled={submitting} style={{ border: "1px solid #dedfe6", background: "white", color: "#656b7a", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   Cancel
                 </button>
-                <button type="submit" disabled={submitting} style={{ background: "#5b57d9", color: "white", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <button type="submit" disabled={submitting} style={{ background: "var(--primary)", color: "white", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   {submitting ? "Saving..." : editing ? "Save Changes" : "Add Medication"}
                 </button>
               </div>

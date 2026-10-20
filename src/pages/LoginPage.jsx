@@ -70,7 +70,7 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(135deg, #f0f0ff 0%, #f7f8fc 60%, #eef6ff 100%)",
+      background: "linear-gradient(135deg, var(--primary-soft) 0%, var(--background) 60%, #fffaf2 100%)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -82,12 +82,12 @@ export default function LoginPage() {
         maxWidth: 440,
         background: "white",
         borderRadius: 20,
-        boxShadow: "0 20px 50px rgba(91, 87, 217, 0.12)",
+        boxShadow: "var(--shadow-lg)",
         overflow: "hidden",
       }}>
         {/* Brand Header */}
         <div style={{
-          background: "linear-gradient(135deg, #5b57d9 0%, #3c38b0 100%)",
+          background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
           color: "white",
           padding: "28px 32px 24px",
           textAlign: "center",
@@ -111,8 +111,8 @@ export default function LoginPage() {
               style={{
                 flex: 1, padding: "12px", border: "none", background: "white",
                 fontSize: 14, fontWeight: 600, cursor: "pointer",
-                color: tab === t ? "#5b57d9" : "#64748b",
-                borderBottom: `2px solid ${tab === t ? "#5b57d9" : "transparent"}`,
+                color: tab === t ? "var(--primary)" : "#64748b",
+                borderBottom: `2px solid ${tab === t ? "var(--primary)" : "transparent"}`,
               }}
             >
               {t === "login" ? "Log In" : "Register"}
@@ -173,7 +173,7 @@ export default function LoginPage() {
 
           <button type="submit" disabled={isSubmitting || isLoading} style={{
             width: "100%", padding: "12px", borderRadius: 9,
-            background: (isSubmitting || isLoading) ? "#a5b4fc" : "#5b57d9",
+            background: (isSubmitting || isLoading) ? "var(--primary-dark)" : "var(--primary)",
             color: "white", border: "none", fontWeight: 700, fontSize: 14,
             cursor: (isSubmitting || isLoading) ? "not-allowed" : "pointer",
           }}>

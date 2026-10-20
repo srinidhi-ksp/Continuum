@@ -74,7 +74,7 @@ function PrimaryBtn({ children, disabled, ...rest }) {
         flex: 1,
         padding: "11px 14px",
         borderRadius: 9,
-        background: disabled ? "#a5b4fc" : "#5b57d9",
+        background: disabled ? "var(--primary-dark)" : "var(--primary)",
         color: "white",
         border: "none",
         fontWeight: 600,
@@ -199,7 +199,7 @@ export default function OnboardingWizard() {
             style={{
               padding: "12px 32px",
               borderRadius: 9,
-              background: "#5b57d9",
+              background: "var(--primary)",
               color: "white",
               border: "none",
               fontWeight: 700,
@@ -316,9 +316,9 @@ export default function OnboardingWizard() {
                       style={{
                         padding: "11px 8px", borderRadius: 10, fontSize: 13, fontWeight: sel ? 700 : 500,
                         cursor: "pointer", textAlign: "center",
-                        border: `2px solid ${sel ? "#5b57d9" : "#e2e8f0"}`,
-                        background: sel ? "#eeedff" : "white",
-                        color: sel ? "#5b57d9" : "#334155",
+                        border: `2px solid ${sel ? "var(--primary)" : "#e2e8f0"}`,
+                        background: sel ? "var(--primary-soft)" : "white",
+                        color: sel ? "var(--primary)" : "#334155",
                       }}
                     >
                       {rel}
@@ -340,7 +340,7 @@ export default function OnboardingWizard() {
                 background: "#f8fafc", border: "1px solid #e2e8f0",
                 borderRadius: 12, padding: "18px 20px", marginBottom: 20,
               }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#5b57d9", letterSpacing: "0.8px", marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--primary)", letterSpacing: "0.8px", marginBottom: 10 }}>
                   CARE CIRCLE SUMMARY
                 </div>
                 {[
@@ -397,7 +397,7 @@ const card = {
 };
 
 const header = {
-  background: "linear-gradient(135deg, #5b57d9 0%, #3c38b0 100%)",
+  background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
   color: "white",
   padding: "24px 32px 20px",
 };

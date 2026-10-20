@@ -1,6 +1,6 @@
 import { supabase, getCaregiverId } from "./supabaseClient";
 
-export async function fetchDailyCareLogs(patientId, limit = 50) {
+export async function fetchDailyCareLogs(patientId, limit = 50, offset = 0) {
   if (!patientId) return [];
 
   const { data, error } = await supabase
@@ -8,7 +8,7 @@ export async function fetchDailyCareLogs(patientId, limit = 50) {
     .select("*, caregiver:caregiver_id ( full_name )")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (error) {
     console.error("[dailyCareApi] Failed to fetch daily care logs:", error);
@@ -53,7 +53,10 @@ export async function createDailyCareLog(entry) {
 
   // 1. Create corresponding timeline event first
   const eventTitle = deriveEventTitle(entry.type, entry);
-  const eventType = (entry.type || "note").toLowerCase();
+  let logType = (entry.type || "note").toLowerCase();
+  if (logType === "food") logType = "meal";
+  if (logType === "general note") logType = "note";
+  const eventType = logType;
 
   const { data: eventRow, error: eventError } = await supabase
     .from("time_event")
@@ -75,19 +78,19 @@ export async function createDailyCareLog(entry) {
 
   // 2. Prepare daily_care_log payload
   let sleepHours = entry.sleepHours != null ? Number(entry.sleepHours) : null;
-  if (sleepHours == null && (entry.hours || entry.minutes)) {
+  if (sleepHours == null && (entry.hours != null || entry.minutes != null)) {
     sleepHours = Number(entry.hours || 0) + Number(entry.minutes || 0) / 60;
   }
-
-  let logType = (entry.type || "note").toLowerCase();
-  if (logType === "food") logType = "meal";
-  if (logType === "general note") logType = "note";
 
   let quantity = entry.quantity || null;
   if (entry.foodItem) {
     quantity = `${entry.foodItem}${entry.quantity ? ` · ${entry.quantity} ${entry.unit || "pieces"}` : ""}`;
-  } else if (entry.type === "Water" && entry.quantity) {
+  } else if (logType === "water" && entry.quantity) {
     quantity = `${entry.quantity} ${entry.unit || "ml"}`;
+  } else if (logType === "mood") {
+    quantity = entry.mood || null;
+  } else if (logType === "medication") {
+    quantity = `${entry.medName || "Medication"} ${entry.medDosage || ""}`.trim();
   }
 
   let symptoms = entry.symptoms || entry.symptom || null;
@@ -102,7 +105,9 @@ export async function createDailyCareLog(entry) {
     type: logType,
     quantity: quantity,
     symptoms: symptoms,
-    notes: entry.notes || null,
+    notes: logType === "medication"
+      ? [entry.medStatus || "Taken", entry.notes].filter(Boolean).join(" · ")
+      : entry.notes || null,
     sleep_hours: sleepHours,
     created_at: now,
   };
@@ -116,6 +121,23 @@ export async function createDailyCareLog(entry) {
   if (logError) {
     console.error("[dailyCareApi] Failed to insert daily_care_log row:", logError);
     throw logError;
+  }
+
+  if (logType === "medication" && entry.medicationId) {
+    const { error: medicationLogError } = await supabase
+      .from("medication_log")
+      .insert({
+        medication_id: entry.medicationId,
+        patient_id: entry.patientId,
+        caregiver_id: caregiverId,
+        status: entry.medStatus || "Taken",
+        notes: entry.notes || null,
+        created_at: now,
+      });
+    if (medicationLogError) {
+      console.error("[dailyCareApi] Failed to insert medication dose log:", medicationLogError);
+      throw medicationLogError;
+    }
   }
 
   return { log: logRow, event: eventRow };

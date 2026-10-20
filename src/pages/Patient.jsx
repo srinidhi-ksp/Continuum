@@ -14,6 +14,7 @@ const EMPTY_FORM = {
   bloodGroup: "",
   allergies: "",
   phone: "",
+  timeZone: "",
   emergencyContact: "",
   relationship: "",
   emergencyPhone: "",
@@ -64,6 +65,7 @@ function Patient() {
       bloodGroup: patient.bloodGroup || "",
       allergies: patient.allergies || "",
       phone: patient.phone || "",
+      timeZone: patient.timeZone || "",
       emergencyContact: patient.emergencyContact === "Not added" ? "" : patient.emergencyContact,
       relationship: patient.relationship === "Not added" ? "" : patient.relationship,
       emergencyPhone: patient.emergencyPhone || "",
@@ -85,6 +87,14 @@ function Patient() {
     if (!form.name || !form.dob || !form.condition) {
       setFormError("Please fill in Full Name, Date of Birth and Medical Condition.");
       return;
+    }
+    if (form.timeZone) {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: form.timeZone }).format();
+      } catch {
+        setFormError("Enter a valid IANA time zone, such as Asia/Kolkata or America/New_York.");
+        return;
+      }
     }
 
     setFormError("");
@@ -258,6 +268,18 @@ function Patient() {
                   <input name="condition" value={form.condition} onChange={handleChange} placeholder="Example: Dementia" />
                 </div>
 
+                <div className="wt-form-group wt-form-group--full">
+                  <label>Patient time zone</label>
+                  <input
+                    name="timeZone"
+                    value={form.timeZone}
+                    onChange={handleChange}
+                    placeholder="e.g. Asia/Kolkata"
+                    autoComplete="off"
+                  />
+                  <small className="wt-field-hint">Set the patient's IANA time zone to receive medication reminders at the configured local times.</small>
+                </div>
+
                 <div className="wt-form-group">
                   <label>Blood Group</label>
                   <select name="bloodGroup" value={form.bloodGroup} onChange={handleChange}>
@@ -385,6 +407,10 @@ function Patient() {
                 <div className="wt-profile-info">
                   <span>Phone</span>
                   <strong>{selectedPatient.phone || "—"}</strong>
+                </div>
+                <div className="wt-profile-info">
+                  <span>Time zone</span>
+                  <strong>{selectedPatient.timeZone || "Not set"}</strong>
                 </div>
                 <div className="wt-profile-info">
                   <span>Emergency Contact</span>

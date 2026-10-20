@@ -53,6 +53,10 @@ export default function CareCircle() {
   // Alert Routing Test State
   const [routedAlertResult, setRoutedAlertResult] = useState(null);
 
+  // Determine if the current user is the primary caregiver for this patient
+  const currentMemberEntry = members.find((m) => m.id === user?.id);
+  const isPrimary = currentMemberEntry?.role === 'primary';
+
   const loadMembers = useCallback(async () => {
     if (!currentPatient?.id) return;
     setLoading(true);
@@ -143,12 +147,12 @@ export default function CareCircle() {
   };
 
   return (
-    <div className="wt-dashboard" style={{ padding: 32, background: "#f7f8fc", minHeight: "100vh" }}>
+    <div className="wt-dashboard">
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
         <div>
           <p className="wt-eyebrow">Care circle</p>
-          <h1 className="wt-greeting__title" style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "#172033" }}>
+          <h1 className="wt-greeting__title" style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--text-primary)" }}>
             Woven around {currentPatient ? currentPatient.name : "your patient"}
           </h1>
           <p className="wt-greeting__sub" style={{ margin: "6px 0 0", color: "#72798a", fontSize: 14 }}>
@@ -186,7 +190,7 @@ export default function CareCircle() {
               display: "flex",
               alignItems: "center",
               gap: 7,
-              background: "#5b57d9",
+              background: "var(--primary)",
               color: "white",
               border: "none",
               borderRadius: 10,
@@ -295,13 +299,13 @@ export default function CareCircle() {
                       </div>
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#172033" }}>{m.name}</h3>
+                          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--text-primary)" }}>{m.name}</h3>
                           <span
                             style={{
                               fontSize: 11,
                               fontWeight: 700,
-                              color: m.role === "primary" ? "#5b57d9" : "#64748b",
-                              background: m.role === "primary" ? "#eeedff" : "#f1f5f9",
+                              color: m.role === "primary" ? "var(--primary)" : "#64748b",
+                              background: m.role === "primary" ? "var(--primary-soft)" : "#f1f5f9",
                               borderRadius: 20,
                               padding: "2px 10px",
                               textTransform: "uppercase",
@@ -386,7 +390,7 @@ export default function CareCircle() {
                         ALERT ROUTING PRIORITY
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", display: "flex", alignItems: "center", gap: 6 }}>
-                        <Bell size={14} color="#5b57d9" /> Priority Order #{m.alertPriority} ({m.alertPreference})
+                        <Bell size={14} color="var(--primary)" /> Priority Order #{m.alertPriority} ({m.alertPreference})
                       </div>
                     </div>
                     <div>
@@ -563,9 +567,9 @@ export default function CareCircle() {
                         style={{
                           padding: "8px 12px",
                           borderRadius: 8,
-                          border: `1px solid ${isAssigned ? "#5b57d9" : "#cbd5e1"}`,
-                          background: isAssigned ? "#eeedff" : "white",
-                          color: isAssigned ? "#5b57d9" : "#475569",
+                          border: `1px solid ${isAssigned ? "var(--primary)" : "#cbd5e1"}`,
+                          background: isAssigned ? "var(--primary-soft)" : "white",
+                          color: isAssigned ? "var(--primary)" : "#475569",
                           fontSize: 13,
                           fontWeight: isAssigned ? 600 : 400,
                           cursor: "pointer",
@@ -592,7 +596,7 @@ export default function CareCircle() {
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: "10px 18px", borderRadius: 8, background: "#5b57d9", color: "white", border: "none", fontWeight: 600, cursor: "pointer" }}
+                  style={{ padding: "10px 18px", borderRadius: 8, background: "var(--primary)", color: "white", border: "none", fontWeight: 600, cursor: "pointer" }}
                 >
                   Save Changes
                 </button>
@@ -670,7 +674,7 @@ export default function CareCircle() {
                     width: "100%",
                     padding: "12px",
                     borderRadius: 10,
-                    background: "#5b57d9",
+                    background: "var(--primary)",
                     color: "white",
                     border: "none",
                     fontWeight: 600,
@@ -754,7 +758,7 @@ export default function CareCircle() {
                   </button>
                   <button
                     type="submit"
-                    style={{ padding: "10px 18px", borderRadius: 8, background: "#5b57d9", color: "white", border: "none", fontWeight: 600, cursor: "pointer" }}
+                    style={{ padding: "10px 18px", borderRadius: 8, background: "var(--primary)", color: "white", border: "none", fontWeight: 600, cursor: "pointer" }}
                   >
                     Generate Secure Invite Link
                   </button>

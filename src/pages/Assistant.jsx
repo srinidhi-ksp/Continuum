@@ -18,15 +18,81 @@ function uid() {
   return crypto.randomUUID();
 }
 
+// Renders AI response text with basic formatting (bold, lists, paragraphs)
+// Avoids dangerouslySetInnerHTML for security
+function renderFormattedText(text) {
+  if (!text) return null;
+
+  // Split into blocks by double newline (paragraphs)
+  const blocks = text.split(/\n\n+/);
+
+  return blocks.map((block, blockIdx) => {
+    const lines = block.split('\n');
+
+    // Check if block is an unordered list
+    if (lines.every(l => /^[\-\*]\s/.test(l.trim()) || l.trim() === '')) {
+      const items = lines.filter(l => /^[\-\*]\s/.test(l.trim()));
+      return (
+        <ul key={blockIdx} style={{ paddingLeft: 18, margin: '6px 0' }}>
+          {items.map((item, i) => (
+            <li key={i} style={{ marginBottom: 3 }}>{renderInline(item.replace(/^[\-\*]\s/, ''))}</li>
+          ))}
+        </ul>
+      );
+    }
+
+    // Check if block is an ordered list
+    if (lines.every(l => /^\d+\.\s/.test(l.trim()) || l.trim() === '')) {
+      const items = lines.filter(l => /^\d+\.\s/.test(l.trim()));
+      return (
+        <ol key={blockIdx} style={{ paddingLeft: 18, margin: '6px 0' }}>
+          {items.map((item, i) => (
+            <li key={i} style={{ marginBottom: 3 }}>{renderInline(item.replace(/^\d+\.\s/, ''))}</li>
+          ))}
+        </ol>
+      );
+    }
+
+    // Check if block is a heading
+    if (lines.length === 1 && /^#{1,3}\s/.test(lines[0])) {
+      const content = lines[0].replace(/^#{1,3}\s/, '');
+      return <p key={blockIdx} style={{ fontWeight: 700, fontSize: '0.95em', marginBottom: 4, marginTop: 8 }}>{content}</p>;
+    }
+
+    // Regular paragraph - render lines with <br /> between them
+    return (
+      <p key={blockIdx} style={{ margin: '0 0 8px' }}>
+        {lines.map((line, i) => (
+          <span key={i}>
+            {renderInline(line)}
+            {i < lines.length - 1 && <br />}
+          </span>
+        ))}
+      </p>
+    );
+  });
+}
+
+function renderInline(text) {
+  if (!text) return null;
+  // Split on **bold** markers
+  const parts = text.split(/(\*\*[^*]+\*\*)/);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
 // ── Component ───────────────────────────────────────────────────────────
 export default function Assistant() {
   const { caregiverProfile } = useAuth();
   const {
-    currentPatient, careCircle, coordinationMetric,
-    currentMedications, currentLogs, todaysReminders
+    currentPatient, coordinationMetric,
   } = usePatient();
 
-  const [lang, setLang] = useState("en");
+  const [lang, setLang] = useState(caregiverProfile?.language || "en");
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +110,12 @@ export default function Assistant() {
   const inputRef = useRef(null);
 
   const dict = dictionary[lang] || dictionary.en;
+
+  useEffect(() => {
+    if (LANG_OPTIONS.some((option) => option.code === caregiverProfile?.language)) {
+      setLang(caregiverProfile.language);
+    }
+  }, [caregiverProfile?.language]);
 
   // ── Speech Recognition setup ──────────────────────────────────────────
   useEffect(() => {
@@ -71,37 +143,6 @@ export default function Assistant() {
   }, [messages, isLoading]);
 
   // ── Build patient context payload ─────────────────────────────────────
-  const buildContext = useCallback(() => {
-    if (!currentPatient) return { caregiverName: caregiverProfile?.full_name || "Caregiver" };
-
-    return {
-      patientSummary: {
-        name: currentPatient.name,
-        condition: currentPatient.condition,
-        age: currentPatient.age,
-        gender: currentPatient.gender,
-      },
-      latestMetric: coordinationMetric || null,
-      coordinationScore: coordinationMetric || null,
-      careCompletion: currentPatient.careCompletion ?? 0,
-      medsTaken: currentPatient.medsTaken ?? 0,
-      medsTotal: currentPatient.medsTotal ?? 0,
-      activeMedications: (currentMedications || [])
-        .filter((m) => m.active)
-        .map((m) => ({ name: m.name, dosage: m.dosage, frequency: m.frequency })),
-      todaysReminders: (todaysReminders || []).map((r) => ({
-        title: r.title, time: r.time, status: r.status,
-      })),
-      recentLogs: (currentLogs || []).slice(0, 5).map((l) => ({
-        type: l.type, notes: l.notes, created_at: l.created_at,
-      })),
-      caregivers: (careCircle || []).map((c) => ({
-        name: c.name, role: c.role, active: c.status === "active",
-      })),
-      caregiverName: caregiverProfile?.full_name || "Caregiver",
-    };
-  }, [currentPatient, coordinationMetric, currentMedications, currentLogs, todaysReminders, careCircle, caregiverProfile]);
-
   // ── Send message ──────────────────────────────────────────────────────
   const handleSend = useCallback(async (text) => {
     const trimmed = (text || inputValue).trim();
@@ -117,7 +158,7 @@ export default function Assistant() {
     try {
       const responseText = await askCaregiverAssistant({
         message: trimmed,
-        patientContext: buildContext(),
+        patientId: currentPatient?.id || null,
         language: lang,
       });
 
@@ -141,7 +182,7 @@ export default function Assistant() {
     } finally {
       setIsLoading(false);
     }
-  }, [inputValue, isLoading, isListening, buildContext, lang, ttsEnabled, dict.error]);
+  }, [inputValue, isLoading, isListening, currentPatient?.id, lang, ttsEnabled, dict.error]);
 
   // ── Retry failed message ──────────────────────────────────────────────
   const handleRetry = useCallback((retryText) => {

@@ -42,19 +42,22 @@ export async function fetchAttempts(caregiverId) {
   return data || [];
 }
 
-export async function saveAttempt({ scenarioId, optionId, isCorrect, caregiverId }) {
+export async function saveAttempt({ scenarioId, optionId, caregiverId }) {
   const cgId = caregiverId || getCaregiverId();
   if (!cgId || !scenarioId || !optionId) {
     throw new Error("caregiverId, scenarioId, and optionId are required.");
+  }
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!user || user.id !== cgId) {
+    throw new Error("The signed-in account does not match this scenario attempt.");
   }
 
   const { data, error } = await supabase
     .from("scenario_attempt")
     .insert({
-      caregiver_id: cgId,
       scenario_id: scenarioId,
       option_id: optionId,
-      is_correct: !!isCorrect,
       attempted_at: new Date().toISOString(),
     })
     .select()
@@ -77,47 +80,8 @@ export async function saveAttempt({ scenarioId, optionId, isCorrect, caregiverId
  */
 export async function generateScenario(patientId) {
   if (!patientId) throw new Error("patientId is required to generate a scenario.");
-
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000); // 60 s — LLM may be slow
-
-  try {
-    const res = await fetch(`${BACKEND_URL}/ai/assistant/generate-scenario`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patient_id: patientId }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      throw new Error(
-        `Backend returned ${res.status}: ${detail || res.statusText}`
-      );
-    }
-
-    const data = await res.json();
-    // data = { card: ScenarioCardOut, options: ScenarioOptionOut[] }
-    return data;
-  } catch (err) {
-    if (err.name === "AbortError") {
-      throw new Error("Scenario generation timed out. Please try again.");
-    }
-    if (
-      err.message?.includes("Failed to fetch") ||
-      err.message?.includes("NetworkError")
-    ) {
-      throw new Error(
-        `Cannot reach the backend at ${BACKEND_URL}. ` +
-          "Make sure the FastAPI server is running."
-      );
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
+  const { generateScenarioWithAuth } = await import("./aiApi");
+  return generateScenarioWithAuth(patientId);
 }
 
 // ── Streak calculation ────────────────────────────────────────────────────────

@@ -1,10 +1,10 @@
 import { supabase } from "./supabaseClient";
 
 function generateSecureToken() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID().replace(/-/g, "");
+  if (typeof crypto === "undefined" || typeof crypto.randomUUID !== "function") {
+    throw new Error("Secure invitation tokens are unavailable in this browser.");
   }
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  return crypto.randomUUID().replace(/-/g, "");
 }
 
 export async function createInvitation({
@@ -27,10 +27,7 @@ export async function createInvitation({
     phone: phone || null,
     relationship: relationship || "Family Member",
     role: role || "family",
-    token: token,
-    status: "pending",
-    created_at: new Date().toISOString(),
-    expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+    token,
   };
 
   const { data, error } = await supabase
@@ -40,14 +37,8 @@ export async function createInvitation({
     .single();
 
   if (error) {
-    console.warn("[invitationApi] care_circle_invite table not ready, using token fallback:", error.message);
-    // Return graceful token object even if table insertion fallback occurs
-    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:5173";
-    return {
-      token,
-      shareableUrl: `${origin}/join?token=${token}`,
-      invite: payload,
-    };
+    console.error("[invitationApi] Failed to create invitation:", error);
+    throw error;
   }
 
   const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:5173";
@@ -61,22 +52,23 @@ export async function createInvitation({
 export async function getInvitationByToken(token) {
   if (!token) return null;
 
-  const { data, error } = await supabase
-    .from("care_circle_invite")
-    .select("*, patient:patient_id ( full_name, condition_type ), inviter:invited_by ( full_name )")
-    .eq("token", token)
-    .single();
+  const { data, error } = await supabase.rpc("lookup_care_circle_invitation", {
+    p_token: token,
+  });
 
-  if (error || !data) {
-    return null;
+  if (error) {
+    console.error("[invitationApi] Failed to look up invitation:", error);
+    throw error;
   }
-
-  const isExpired = new Date(data.expires_at) < new Date();
-  if (isExpired || data.status !== "pending") {
-    return { ...data, isValid: false, reason: isExpired ? "expired" : "used" };
-  }
-
-  return { ...data, isValid: true };
+  const invite = data?.[0];
+  if (!invite) return null;
+  return {
+    ...invite,
+    isValid: invite.is_valid,
+    reason: invite.invalid_reason,
+    patient: { full_name: invite.patient_name },
+    inviter: { full_name: invite.inviter_name },
+  };
 }
 
 export async function acceptInvitation(token, caregiverId) {
@@ -84,45 +76,19 @@ export async function acceptInvitation(token, caregiverId) {
     throw new Error("Token and caregiverId are required to accept an invitation.");
   }
 
-  // 1. Validate invitation
-  const invite = await getInvitationByToken(token);
-  if (!invite || !invite.isValid) {
-    throw new Error(invite ? `Invitation is ${invite.reason || "invalid"}.` : "Invitation not found.");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!user || user.id !== caregiverId) {
+    throw new Error("The signed-in account does not match the invitation recipient.");
   }
-
-  const patientId = invite.patient_id;
-
-  // 2. Check if caregiver is already linked to this patient (prevents duplicate links)
-  const { data: existingLink } = await supabase
-    .from("caregiver_pat")
-    .select("*")
-    .eq("caregiver_id", caregiverId)
-    .eq("patient_id", patientId)
-    .is("removed_at", null)
-    .single();
-
-  if (!existingLink) {
-    // 3. Link caregiver to existing patient (NO duplicate patient created)
-    const linkPayload = {
-      caregiver_id: caregiverId,
-      patient_id: patientId,
-      role: invite.role || "family",
-      joining_at: new Date().toISOString(),
-      removed_at: null,
-    };
-
-    const { error: linkError } = await supabase.from("caregiver_pat").insert(linkPayload);
-    if (linkError) {
-      console.error("[invitationApi] Failed to link caregiver to patient:", linkError);
-      throw linkError;
-    }
+  const { data, error } = await supabase.rpc("accept_care_circle_invitation", {
+    p_token: token,
+  });
+  if (error) {
+    console.error("[invitationApi] Failed to accept invitation:", error);
+    throw error;
   }
-
-  // 4. Mark invite as accepted/used
-  await supabase
-    .from("care_circle_invite")
-    .update({ status: "accepted" })
-    .eq("token", token);
-
-  return { patientId, patientName: invite.patient?.full_name };
+  const accepted = data?.[0];
+  if (!accepted) throw new Error("The invitation could not be accepted.");
+  return { patientId: accepted.patient_id, patientName: accepted.patient_name };
 }

@@ -82,6 +82,7 @@ export function mapPatientRow(row, extras = {}) {
     age: computeAge(row.dob),
     gender: row.gender,
     condition: row.condition_type,
+    timeZone: row.time_zone || "",
     status: latestMetric?.risk_level === "elevated" ? "Attention" : "Stable",
     careCompletion,
     medication: `${medsTaken} / ${medsTotal}`,
@@ -104,6 +105,7 @@ export function mapPatientRow(row, extras = {}) {
 export const CARE_LOG_LABELS = {
   medication: "Medication taken",
   meal: "Meal logged",
+  water: "Water logged",
   sleep: "Sleep logged",
   mobility: "Mobility logged",
   symptom: "Symptom observed",

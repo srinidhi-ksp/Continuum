@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { getBackendUrl } from "./backendApi";
 
 const WINDOW_DAYS = 7;
 const LATE_THRESHOLD_MINUTES = 30;
@@ -110,7 +111,7 @@ export async function aggregateCoordinationFeatures({ patientId, caregiverId, no
 
   const medications = medicationResult.data || [];
   const medicationIds = medications.map((medication) => medication.medication_id);
-  const [scheduleResult, logResult, circleResult, notificationResult, attemptsResult] = await Promise.all([
+  const [scheduleResult, logResult, circleResult, notificationResult] = await Promise.all([
     medicationIds.length
       ? supabase.from("medication_schedule").select("schedule_id, medication_id, time_of_day").in("medication_id", medicationIds)
       : Promise.resolve({ data: [], error: null }),
@@ -130,14 +131,9 @@ export async function aggregateCoordinationFeatures({ patientId, caregiverId, no
       .select("notification_id", { count: "exact", head: true })
       .eq("caregiver_id", caregiverId)
       .gte("created_at", sinceIso),
-    supabase
-      .from("scenario_attempt")
-      .select("attempt_id", { count: "exact", head: true })
-      .eq("caregiver_id", caregiverId)
-      .gte("attempted_at", sinceIso),
   ]);
 
-  for (const result of [scheduleResult, logResult, circleResult, notificationResult, attemptsResult]) {
+  for (const result of [scheduleResult, logResult, circleResult, notificationResult]) {
     if (result.error) throw result.error;
   }
 
@@ -170,14 +166,14 @@ export async function aggregateCoordinationFeatures({ patientId, caregiverId, no
     ),
     task_share: bounded(taskShare, 1),
     notifications_received: bounded(notificationResult.count || 0, 50),
-    scenario_attempts: bounded(attemptsResult.count || 0, 50),
+    scenario_attempts: 0,
   };
 }
 
 export async function recalculateCoordinationScore({ patientId, caregiverId, accessToken }) {
   if (!accessToken) throw new Error("A signed-in Supabase session is required.");
   const features = await aggregateCoordinationFeatures({ patientId, caregiverId });
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+  const backendUrl = getBackendUrl();
   const response = await fetch(`${backendUrl}/ml/predict`, {
     method: "POST",
     headers: {

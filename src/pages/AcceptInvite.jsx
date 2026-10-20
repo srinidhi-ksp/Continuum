@@ -78,7 +78,7 @@ export default function AcceptInvite() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#f7f8fc",
+        background: "var(--background)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -100,7 +100,7 @@ export default function AcceptInvite() {
         {/* Banner */}
         <div
           style={{
-            background: "linear-gradient(135deg, #5b57d9 0%, #3c38b0 100%)",
+            background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
             color: "white",
             padding: "28px 32px",
             textAlign: "center",
@@ -139,7 +139,7 @@ export default function AcceptInvite() {
                 style={{
                   padding: "10px 20px",
                   borderRadius: 9,
-                  background: "#5b57d9",
+                  background: "var(--primary)",
                   color: "white",
                   border: "none",
                   fontWeight: 600,
@@ -168,7 +168,7 @@ export default function AcceptInvite() {
                   marginBottom: 24,
                 }}
               >
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#5b57d9", letterSpacing: "0.5px", marginBottom: 6 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", letterSpacing: "0.5px", marginBottom: 6 }}>
                   YOU HAVE BEEN INVITED TO JOIN
                 </div>
                 <h3 style={{ margin: "0 0 4px", fontSize: 20, color: "#0f172a" }}>
@@ -195,7 +195,7 @@ export default function AcceptInvite() {
                   width: "100%",
                   padding: "14px",
                   borderRadius: 10,
-                  background: "#5b57d9",
+                  background: "var(--primary)",
                   color: "white",
                   border: "none",
                   fontWeight: 700,

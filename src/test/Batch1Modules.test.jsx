@@ -47,12 +47,45 @@ import {
 } from "../lib/careCircleApi";
 import { createDailyCareLog, fetchDailyCareLogs } from "../lib/dailyCareApi";
 import {
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "../lib/notificationApi";
+import {
   fetchMedications,
   createMedication,
   toggleMedicationActive,
   logMedicationDose,
 } from "../lib/medicationApi";
 import { fetchTimelineEvents, addTimelineComment } from "../lib/timelineApi";
+
+describe("Database-backed notifications", () => {
+  it("counts unread notifications and persists individual and bulk read state", async () => {
+    const notification = {
+      recipient_id: fixtures.CURRENT_CAREGIVER_ID,
+      patient_id: "22222222-2222-2222-2222-222222222201",
+      type: "coordination_alert",
+      title: "Care coordination needs attention",
+      body: "Review the dashboard.",
+      due_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      read_at: null,
+    };
+    const { data } = await mockSupabase.from("care_notification").insert(notification).select().single();
+    let result = await fetchNotifications(fixtures.CURRENT_CAREGIVER_ID);
+    expect(result.unreadCount).toBe(1);
+    expect(result.notifications[0].title).toBe(notification.title);
+
+    await markNotificationRead(data.notification_id, fixtures.CURRENT_CAREGIVER_ID);
+    result = await fetchNotifications(fixtures.CURRENT_CAREGIVER_ID);
+    expect(result.unreadCount).toBe(0);
+
+    await mockSupabase.from("care_notification").insert({ ...notification, read_at: null });
+    await markAllNotificationsRead(fixtures.CURRENT_CAREGIVER_ID);
+    result = await fetchNotifications(fixtures.CURRENT_CAREGIVER_ID);
+    expect(result.unreadCount).toBe(0);
+  });
+});
 
 describe("Batch 1 Modules Integration & API Unit Tests", () => {
   beforeEach(() => {
@@ -186,6 +219,26 @@ describe("Batch 1 Modules Integration & API Unit Tests", () => {
     it("should fetch daily care logs for patient", async () => {
       const logs = await fetchDailyCareLogs("22222222-2222-2222-2222-222222222201");
       expect(logs.length).toBeGreaterThan(0);
+    });
+
+    it("persists medication status and dose details in the dedicated medication log", async () => {
+      const result = await createDailyCareLog({
+        patientId: "22222222-2222-2222-2222-222222222201",
+        type: "Medication",
+        medicationId: "44444444-4444-4444-4444-444444444401",
+        medName: "Donepezil",
+        medDosage: "10mg",
+        medStatus: "Skipped",
+        notes: "Patient declined",
+      });
+
+      expect(result.log.type).toBe("medication");
+      expect(result.log.quantity).toBe("Donepezil 10mg");
+      expect(result.log.notes).toContain("Skipped");
+      expect(mockSupabase._tables.medication_log.at(-1)).toMatchObject({
+        medication_id: "44444444-4444-4444-4444-444444444401",
+        status: "Skipped",
+      });
     });
   });
 

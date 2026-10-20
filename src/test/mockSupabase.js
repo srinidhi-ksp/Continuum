@@ -9,6 +9,7 @@ const PK_COLUMN = {
   daily_care_log: "log_id",
   coordination_metric: "metric_id",
   care_circle_invite: "invite_id",
+  care_notification: "notification_id",
   time_event: "event_id",
   timeline_commend: "commend_id",
   scenario_card: "scenario_id",
@@ -46,6 +47,7 @@ class MockQuery {
     this._selectOpts = {};
     this._order = null;
     this._limit = null;
+    this._range = null;
     this._single = false;
     this._mode = "select";
     this._payload = null;
@@ -82,6 +84,13 @@ class MockQuery {
   }
   limit(n) {
     this._limit = n;
+    return this;
+  }
+  range(from, to) {
+    this._range = { from, to };
+    return this;
+  }
+  abortSignal() {
     return this;
   }
   single() {
@@ -163,7 +172,8 @@ class MockQuery {
       return { count: rows.length, data: null, error: null };
     }
 
-    if (this._limit != null) rows = rows.slice(0, this._limit);
+    if (this._range) rows = rows.slice(this._range.from, this._range.to + 1);
+    else if (this._limit != null) rows = rows.slice(0, this._limit);
 
     rows = rows.map((r) =>
       embedRelations(this.table, { ...r }, this._select, this.caregiversRef, this.patientsRef)
