@@ -29,11 +29,15 @@ export function setCurrentCaregiverId(id) { currentCaregiverId = id || null; }
 export function getCaregiverId() { return currentCaregiverId; }
 export async function getActiveCaregiverId() {
   if (currentCaregiverId) return currentCaregiverId;
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user?.id) return null;
-  const { data, error } = await supabase.from("caregiver").select("caregiver_id")
-    .eq("auth_user_id", session.user.id).maybeSingle();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.id) return null;
+  const { data, error } = await supabase
+    .from("caregiver")
+    .select("caregiver_id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
   if (error) throw error;
   currentCaregiverId = data?.caregiver_id || null;
   return currentCaregiverId;
 }
+

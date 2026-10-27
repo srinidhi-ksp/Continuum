@@ -10,6 +10,7 @@ import { careLogTitle } from "../lib/mappers";
 import { recalculateCoordinationScore, computeLiveStrainAndScore } from "../lib/coordinationApi";
 import { assignTask, reassignTask, setTaskStatus } from "../lib/taskApi";
 import { useState } from "react";
+import OnboardingWizard from "../components/OnboardingWizard";
 
 function greetingForNow() {
   const hour = new Date().getHours();
@@ -86,7 +87,6 @@ function isTaskOverdue(task) {
   if (task.status === "completed" || task.status === "cancelled") return false;
   return new Date(task.due_at) < new Date();
 }
-
 function Dashboard() {
   const {
     currentPatient,
@@ -96,7 +96,10 @@ function Dashboard() {
     todaysReminders,
     patientTasks,
     myTasks,
+    isLoading,
     isDetailLoading,
+    loadError,
+    reloadPatients,
     reloadPatientDetail,
     reloadPatientTasks,
   } = usePatient();
@@ -105,6 +108,10 @@ function Dashboard() {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [recalculateError, setRecalculateError] = useState("");
   const [recalculateNotice, setRecalculateNotice] = useState("");
+
+  // Onboarding wizard modal state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingType, setOnboardingType] = useState("new_patient");
 
   // Tasks state
   const [taskTab, setTaskTab] = useState("my"); // "my" | "all"
@@ -129,16 +136,58 @@ function Dashboard() {
     setActionDecisions((prev) => ({ ...prev, [actionId]: decision }));
   };
 
-  if (!currentPatient) return (
-    <section style={{ padding: 32, maxWidth: 760, margin: "0 auto" }}>
-      <h1>Welcome to Continuum</h1>
-      <p>No patient is linked to your caregiver account yet. Your dashboard will populate from Supabase after you create a patient care circle or accept an invitation.</p>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <Link to="/patient" className="wt-button">Set up a patient</Link>
-        <Link to="/care-circle" className="wt-button wt-button-secondary">Join or manage a care circle</Link>
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "50vh", color: "#64748b" }}>
+        <RefreshCw size={22} style={{ marginRight: 10, animation: "spin 1s linear infinite" }} />
+        <span>Loading care dashboard from Supabase…</span>
       </div>
-    </section>
-  );
+    );
+  }
+
+  if (loadError) {
+    return (
+      <section style={{ padding: 32, maxWidth: 640, margin: "40px auto", textAlign: "center", background: "white", borderRadius: 16, border: "1px solid #fee2e2" }}>
+        <AlertTriangle size={36} color="#ef4444" style={{ marginBottom: 12 }} />
+        <h2 style={{ fontSize: 18, color: "#991b1b", margin: "0 0 8px" }}>Could not load patients</h2>
+        <p style={{ fontSize: 14, color: "#64748b", marginBottom: 20 }}>{loadError}</p>
+        <button onClick={reloadPatients} className="wt-btn wt-btn--primary">Retry</button>
+      </section>
+    );
+  }
+
+  if (!currentPatient) {
+    return (
+      <section style={{ padding: 40, maxWidth: 680, margin: "40px auto", background: "white", borderRadius: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.05)", border: "1px solid #e2e8f0", textAlign: "center" }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(91, 87, 217, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: "#5b57d9" }}>
+          <Users size={28} />
+        </div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>Welcome to CONTINUUM</h1>
+        <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 24px", lineHeight: 1.6 }}>
+          No patient is linked to your caregiver account yet. Start by setting up a new patient care circle or joining an existing circle via invitation link.
+        </p>
+        <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            onClick={() => { setOnboardingType("new_patient"); setShowOnboarding(true); }}
+            className="wt-btn wt-btn--primary"
+            style={{ padding: "12px 24px", fontSize: 14, borderRadius: 10, cursor: "pointer" }}
+          >
+            + Create New Patient / Care Circle
+          </button>
+          <button
+            onClick={() => { setOnboardingType("join_circle"); setShowOnboarding(true); }}
+            className="wt-btn wt-btn--ghost"
+            style={{ padding: "12px 24px", fontSize: 14, borderRadius: 10, cursor: "pointer", border: "1px solid #cbd5e1" }}
+          >
+            Join Existing Circle via Invite
+          </button>
+        </div>
+        {showOnboarding && (
+          <OnboardingWizard initialType={onboardingType} onClose={() => setShowOnboarding(false)} />
+        )}
+      </section>
+    );
+  }
 
   const isPrimaryCaregiver = careCircle.some(
     (c) => c.id === caregiverProfile?.caregiver_id && c.role === "primary"

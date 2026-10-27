@@ -119,10 +119,11 @@ function MainLayout({ children }) {
   const isEmpty = !isLoading && !loadError && patients.length === 0;
   const isPatientRoute = location.pathname === "/patient";
 
-  // Show the setup prompt across routes when no patient is linked yet (except /patient which has patient management)
-  const showState = isLoading || loadError || (isEmpty && !isPatientRoute && !manualWizardOpen && !needsOnboarding);
+  // Show setup wizard only when explicitly opened or when user has no active memberships and is in onboarding state
+  const shouldShowWizard = manualWizardOpen || (isEmpty && needsOnboarding);
 
-  const shouldShowWizard = needsOnboarding || manualWizardOpen;
+  // Show AppShellState only when loading, loadError, or empty without the wizard active
+  const showState = isLoading || loadError || (isEmpty && !isPatientRoute && !shouldShowWizard);
 
   const handleOpenWizard = (type = "new_patient") => {
     setInitialWizardType(type);

@@ -99,21 +99,32 @@ export async function assignTask({
 
   // 1. Try RPC if available
   try {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc("assign_task", {
-      p_patient_id: patientId,
+    if (typeof supabase?.rpc === "function") {
+      const { data: rpcData, error: rpcError } = await supabase.rpc("assign_task", {
+      p_patient: patientId,
+      p_assignee: assignedTo || null,
       p_title: title.trim(),
-      p_description: description.trim(),
-      p_category: category,
-      p_priority: priority,
-      p_due_at: dueAt,
-      p_assigned_to: assignedTo,
-      p_assigned_by: assignedBy,
-      p_is_essential: isEssential,
-      p_grace_minutes: graceMinutes,
+      p_description: description?.trim() || null,
+      p_category: category || "daily_log",
+      p_priority: priority || "normal",
+      p_due_at: dueAt || null,
     });
-    if (!rpcErr && rpcData) return rpcData;
-  } catch {
-    // fallback to direct insert
+      if (!rpcError && rpcData) {
+        // Fetch joined task object to match return format
+        const { data: fetched } = await supabase
+          .from("care_task")
+          .select(`
+            *,
+            assignee:assigned_to ( caregiver_id, full_name, email ),
+            assigner:assigned_by ( caregiver_id, full_name )
+          `)
+          .eq("task_id", rpcData)
+          .maybeSingle();
+        if (fetched) return fetched;
+      }
+    }
+  } catch (rpcErr) {
+    console.warn("[taskApi] assign_task RPC failed, attempting direct insert:", rpcErr);
   }
 
   // 2. Direct table insert fallback
@@ -157,13 +168,25 @@ export async function reassignTask({ taskId, newAssigneeId }) {
   if (!taskId) throw new Error("Task ID is required.");
 
   try {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc("reassign_task", {
-      p_task_id: taskId,
-      p_assigned_to: newAssigneeId,
-    });
-    if (!rpcErr && rpcData) return rpcData;
-  } catch {
-    // fallback to direct table update
+    if (typeof supabase?.rpc === "function") {
+      const { error: rpcErr } = await supabase.rpc("reassign_task", {
+        p_task: taskId,
+        p_new_assignee: newAssigneeId || null,
+      });
+      if (!rpcErr) {
+      const { data: fetched } = await supabase
+        .from("care_task")
+        .select(`
+          *,
+          assignee:assigned_to ( caregiver_id, full_name, email )
+        `)
+        .eq("task_id", taskId)
+        .maybeSingle();
+      if (fetched) return fetched;
+    }
+  }
+} catch (rpcEx) {
+    console.warn("[taskApi] reassign_task RPC notice:", rpcEx);
   }
 
   const { data, error } = await supabase
@@ -189,20 +212,33 @@ export async function reassignTask({ taskId, newAssigneeId }) {
 /**
  * Update task status (e.g. in_progress, completed, cancelled).
  */
-export async function setTaskStatus({ taskId, status }) {
+export async function setTaskStatus({ taskId, status, note = null }) {
   if (!taskId || !status) throw new Error("Task ID and status are required.");
 
   const now = new Date().toISOString();
   const isCompleted = status === "completed";
 
   try {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc("set_task_status", {
-      p_task_id: taskId,
-      p_status: status,
-    });
-    if (!rpcErr && rpcData) return rpcData;
-  } catch {
-    // fallback to direct table update
+    if (typeof supabase?.rpc === "function") {
+      const { error: rpcErr } = await supabase.rpc("set_task_status", {
+        p_task: taskId,
+        p_status: status,
+        p_note: note,
+      });
+      if (!rpcErr) {
+        const { data: fetched } = await supabase
+          .from("care_task")
+          .select(`
+            *,
+            assignee:assigned_to ( caregiver_id, full_name, email )
+          `)
+          .eq("task_id", taskId)
+          .maybeSingle();
+        if (fetched) return fetched;
+      }
+    }
+  } catch (rpcEx) {
+    console.warn("[taskApi] set_task_status RPC notice:", rpcEx);
   }
 
   const updates = {

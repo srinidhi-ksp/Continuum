@@ -111,7 +111,7 @@ export default function LoginPage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTab("register");
       setSetupType("join_circle");
-      setRegStep(3);
+      setRegStep(1);
       setInviteTokenInput(queryToken);
       verifyToken(queryToken);
     }
@@ -169,7 +169,7 @@ export default function LoginPage() {
     }
   }
 
-  // Step 1 Validation -> Go to Step 2
+  // Step 1 Validation -> Go to Step 2 or Step 3
   function handleGoToStep2(e) {
     e.preventDefault();
     setError("");
@@ -184,7 +184,11 @@ export default function LoginPage() {
     if (!emergencyContact) setEmergencyContact(fullName);
     if (!emergencyPhone && phone) setEmergencyPhone(phone);
 
-    setRegStep(2);
+    if (setupType === "join_circle" && inviteTokenInput) {
+      setRegStep(3);
+    } else {
+      setRegStep(2);
+    }
   }
 
   // Final Registration & Care Circle Setup Submission

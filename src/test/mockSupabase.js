@@ -209,6 +209,9 @@ export function createMockSupabase(fixtureTables) {
       async getSession() {
         return { data: { session: mockSession }, error: null };
       },
+      async getUser() {
+        return { data: { user: mockSession?.user || null }, error: null };
+      },
       async signUp({ email, options }) {
         const userId = `mock-user-${idCounter++}`;
         const user = { id: userId, email, user_metadata: options?.data || {} };

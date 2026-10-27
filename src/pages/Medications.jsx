@@ -33,7 +33,7 @@ const EMPTY_MED = {
 const EMPTY_APPT = {
   doctor_name: "",
   specialty: "Neurology",
-  location: "Apollo Hospital, Chennai",
+  location: "",
   appointment_time: "",
   notes: "",
   status: "upcoming",

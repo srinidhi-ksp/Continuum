@@ -33,7 +33,7 @@ const RELATIONSHIPS = [
   "Other",
 ];
 
-const ROLES = ["primary", "family", "secondary", "external"];
+const ROLES = ["primary", "family", "external"];
 
 export default function CareCircle() {
   const { currentPatient, reloadPatientDetail } = usePatient();

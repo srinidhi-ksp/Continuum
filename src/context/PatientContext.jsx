@@ -10,7 +10,7 @@ import { useAuth } from "./AuthContext";
 const PatientContext = createContext(null);
 
 export function PatientProvider({ children }) {
-  const { caregiverProfile } = useAuth();
+  const { caregiverProfile, setNeedsOnboarding } = useAuth();
   const [patients, setPatients] = useState([]);
   const [currentPatientId, setCurrentPatientId] = useState(null);
 
@@ -30,8 +30,6 @@ export function PatientProvider({ children }) {
   const loadPatients = useCallback(async () => {
     const activeCaregiverId = caregiverProfile?.caregiver_id;
 
-    // Don't attempt to load if no real caregiver is authenticated
-    // (the default hardcoded ID starts with "11111111" for dev/testing only)
     if (!activeCaregiverId) {
       setPatients([]);
       setCurrentPatientId(null);
@@ -63,6 +61,11 @@ export function PatientProvider({ children }) {
         .in("patient_id", patientIds);
 
       if (patientError) throw patientError;
+
+      // Active patients exist in database -> stop setup loop and clear onboarding flag
+      if (patientRows && patientRows.length > 0) {
+        setNeedsOnboarding?.(false);
+      }
 
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
@@ -139,7 +142,7 @@ export function PatientProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  }, [caregiverProfile?.caregiver_id]);
+  }, [caregiverProfile?.caregiver_id, setNeedsOnboarding]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -151,7 +154,7 @@ export function PatientProvider({ children }) {
     if (!patientId) return;
     setIsDetailLoading(true);
     try {
-      const [members, medRowsMapped, logRows, metricRes, apptRows, taskRows] = await Promise.all([
+      const results = await Promise.allSettled([
         fetchCareCircleMembers(patientId),
         fetchMedications(patientId),
         fetchDailyCareLogs(patientId, 30),
@@ -168,6 +171,13 @@ export function PatientProvider({ children }) {
           .order("appointment_date", { ascending: true }),
         fetchPatientTasks(patientId),
       ]);
+
+      const members = results[0].status === "fulfilled" ? results[0].value : [];
+      const medRowsMapped = results[1].status === "fulfilled" ? results[1].value : [];
+      const logRows = results[2].status === "fulfilled" ? results[2].value : [];
+      const metricRes = results[3].status === "fulfilled" ? results[3].value : { data: null };
+      const apptRows = results[4].status === "fulfilled" ? results[4].value : { data: [] };
+      const taskRows = results[5].status === "fulfilled" ? results[5].value : [];
 
       setCareCircle(members);
       setTasksByPatient((prev) => ({ ...prev, [patientId]: taskRows || [] }));

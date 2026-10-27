@@ -47,6 +47,39 @@ export async function createInvitation({ patientId, invitedBy, email, relationsh
 export async function getInvitationByToken(token) {
   if (!token) return null;
   const cleanToken = extractToken(token);
+
+  // 1. Try secure RPC get_invitation_details (accessible to anon & authenticated)
+  try {
+    if (typeof supabase?.rpc === "function") {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc("get_invitation_details", {
+        p_token: cleanToken,
+      });
+      if (!rpcErr && rpcData) {
+        const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+        if (row) {
+          const expired = new Date(row.expires_at) < new Date();
+          const isValid = !expired && row.status === "pending";
+          return {
+            invitation_id: row.invitation_id,
+            patient_id: row.patient_id,
+            email: row.email,
+            role: row.role,
+            relationship: row.relationship,
+            status: row.status,
+            expires_at: row.expires_at,
+            patient: { full_name: row.patient_name, condition_type: row.condition_type },
+            inviter: { full_name: row.inviter_name },
+            isValid,
+            reason: expired ? "expired" : row.status !== "pending" ? row.status : null,
+          };
+        }
+      }
+    }
+  } catch (rpcEx) {
+    console.warn("[invitationApi] get_invitation_details RPC notice:", rpcEx);
+  }
+
+  // 2. Direct table fallback if RPC not yet deployed
   const tokenHash = await sha256Hex(cleanToken);
   let { data, error } = await supabase.from("invitation")
     .select("*, patient:patient_id ( full_name, condition_type ), inviter:invited_by ( full_name )")
@@ -70,6 +103,31 @@ export async function getInvitationByToken(token) {
 export async function acceptInvitation(token, caregiverId, customRelationship = null) {
   if (!token || !caregiverId) throw new Error("Token and caregiverId are required.");
   const cleanToken = extractToken(token);
+
+  // 1. Try atomic accept_invitation RPC (SECURITY DEFINER)
+  try {
+    if (typeof supabase?.rpc === "function") {
+      const { data: acceptedPatientId, error: rpcErr } = await supabase.rpc("accept_invitation", {
+        p_token: cleanToken,
+        p_relationship: customRelationship || null,
+      });
+      if (!rpcErr && acceptedPatientId) {
+        const { data: patientRow } = await supabase
+          .from("patient")
+          .select("patient_id, full_name")
+          .eq("patient_id", acceptedPatientId)
+          .maybeSingle();
+        return {
+          patientId: acceptedPatientId,
+          patientName: patientRow?.full_name || "Patient",
+        };
+      }
+    }
+  } catch (rpcEx) {
+    console.warn("[invitationApi] accept_invitation RPC fallback:", rpcEx);
+  }
+
+  // 2. Direct table fallback
   const invite = await getInvitationByToken(cleanToken);
   if (!invite?.isValid) throw new Error(invite ? `Invitation is ${invite.reason || "invalid"}.` : "Invitation not found.");
   

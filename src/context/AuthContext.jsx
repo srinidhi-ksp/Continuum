@@ -69,19 +69,21 @@ export function AuthProvider({ children }) {
 
     async function initAuth() {
       try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (currentSession?.user && mounted) {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser && mounted) {
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
           setSession(currentSession);
-          setUser(currentSession.user);
-          const profile = await fetchCaregiverProfile(currentSession.user.id);
+          setUser(currentUser);
+          const profile = await fetchCaregiverProfile(currentUser.id, currentUser.email);
           setCurrentCaregiverId(profile?.caregiver_id || null);
           if (mounted) {
             setCaregiverProfile(profile);
             if (profile?.caregiver_id) {
               await applyPendingSetup(profile.caregiver_id);
             }
-            const pendingOnboarding = safeStorage.getItem(ONBOARDING_KEY) === "1";
-            setNeedsOnboardingState(pendingOnboarding || !profile);
+            // Do not force onboarding loop on session restore; database membership determines onboarding
+            setNeedsOnboardingState(false);
+            safeStorage.removeItem(ONBOARDING_KEY);
           }
         }
       } catch (err) {
@@ -100,7 +102,7 @@ export function AuthProvider({ children }) {
       setUser(newUser);
 
       if (newUser) {
-        const profile = await fetchCaregiverProfile(newUser.id);
+        const profile = await fetchCaregiverProfile(newUser.id, newUser.email);
         setCurrentCaregiverId(profile?.caregiver_id || null);
         if (mounted) {
           setCaregiverProfile(profile);
@@ -134,7 +136,8 @@ export function AuthProvider({ children }) {
       if (res.caregiver?.caregiver_id) {
         await applyPendingSetup(res.caregiver.caregiver_id);
       }
-      setNeedsOnboarding(!res.caregiver);
+      // Determine onboarding status from database membership result in PatientContext, not flags
+      setNeedsOnboarding(false);
       return res;
     } finally {
       setIsLoading(false);

@@ -1,6 +1,6 @@
 import { supabase, setCurrentCaregiverId } from "./supabaseClient";
 
-export async function fetchCaregiverProfile(authUserId) {
+export async function fetchCaregiverProfile(authUserId, userEmail = null) {
   if (!authUserId) return null;
   let { data, error } = await supabase
     .from("caregiver")
@@ -8,14 +8,35 @@ export async function fetchCaregiverProfile(authUserId) {
     .eq("auth_user_id", authUserId)
     .maybeSingle();
   if (error) throw error;
-  if (!data) {
-    const fallback = await supabase
+
+  // If not found by auth_user_id, check if unlinked caregiver row exists by email
+  if (!data && userEmail) {
+    const cleanEmail = userEmail.trim().toLowerCase();
+    const { data: byEmail, error: emailErr } = await supabase
       .from("caregiver")
       .select("*")
-      .eq("caregiver_id", authUserId)
+      .eq("email", cleanEmail)
       .maybeSingle();
-    data = fallback.data;
+    if (!emailErr && byEmail) {
+      if (!byEmail.auth_user_id) {
+        const { data: linked, error: linkErr } = await supabase
+          .from("caregiver")
+          .update({
+            auth_user_id: authUserId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("caregiver_id", byEmail.caregiver_id)
+          .select("*")
+          .single();
+        if (!linkErr && linked) {
+          data = linked;
+        }
+      } else if (byEmail.auth_user_id === authUserId) {
+        data = byEmail;
+      }
+    }
   }
+
   if (data) setCurrentCaregiverId(data.caregiver_id);
   return data || null;
 }
@@ -88,14 +109,28 @@ export async function signInCaregiver({ email, password }) {
     email: email.trim().toLowerCase(), password,
   });
   if (error) throw error;
-  const user = data?.user;
+
+  // Use supabase.auth.getUser() to obtain the authenticated user's UUID
+  let user = data?.user;
+  if (typeof supabase?.auth?.getUser === "function") {
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (!userError && userData?.user) {
+        user = userData.user;
+      }
+    } catch {
+      // fallback to signIn return data
+    }
+  }
   if (!user) return { user: null, caregiver: null, session: null };
-  let caregiver = await fetchCaregiverProfile(user.id);
+
+  const userEmail = user.email || email;
+  let caregiver = await fetchCaregiverProfile(user.id, userEmail);
   if (!caregiver) {
     caregiver = await createCaregiverProfile({
       authUserId: user.id,
       fullName: user.user_metadata?.full_name,
-      email: user.email || email,
+      email: userEmail,
       phone: user.user_metadata?.phone,
     });
   }
