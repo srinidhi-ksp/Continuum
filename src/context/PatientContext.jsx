@@ -46,10 +46,20 @@ export function PatientProvider({ children }) {
         .eq("caregiver_id", activeCaregiverId)
         .eq("status", "active");
 
-      if (linkError) throw linkError;
+      if (linkError) {
+        console.error("[PatientContext] caregiver_pat query error:", linkError.code, linkError.message, linkError.hint);
+        throw new Error(`Membership lookup failed (${linkError.code}): ${linkError.message}`);
+      }
 
       const patientIds = [...new Set((links || []).map((l) => l.patient_id))];
       if (patientIds.length === 0) {
+        // Log diagnostic info so developers can spot RLS misconfiguration
+        console.warn(
+          "[PatientContext] caregiver_pat returned 0 rows for caregiver_id:",
+          activeCaregiverId,
+          "\n→ If patients exist in Supabase, this is likely an RLS policy issue.",
+          "\n→ Run 02_fix_rls_minimal.sql in the Supabase SQL editor, then verify caregiver.auth_user_id is set."
+        );
         setPatients([]);
         setCurrentPatientId(null);
         return;

@@ -7,11 +7,15 @@ export async function fetchCaregiverProfile(authUserId, userEmail = null) {
     .select("*")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
-  if (error) throw error;
+  if (error) {
+    console.error("[authApi] caregiver by auth_user_id error:", error.code, error.message);
+    throw error;
+  }
 
   // If not found by auth_user_id, check if unlinked caregiver row exists by email
   if (!data && userEmail) {
     const cleanEmail = userEmail.trim().toLowerCase();
+    console.warn("[authApi] No caregiver found for auth_user_id:", authUserId, "- trying email:", cleanEmail);
     const { data: byEmail, error: emailErr } = await supabase
       .from("caregiver")
       .select("*")
@@ -19,6 +23,7 @@ export async function fetchCaregiverProfile(authUserId, userEmail = null) {
       .maybeSingle();
     if (!emailErr && byEmail) {
       if (!byEmail.auth_user_id) {
+        console.log("[authApi] Linking auth_user_id to existing caregiver row:", byEmail.caregiver_id);
         const { data: linked, error: linkErr } = await supabase
           .from("caregiver")
           .update({
@@ -30,11 +35,25 @@ export async function fetchCaregiverProfile(authUserId, userEmail = null) {
           .single();
         if (!linkErr && linked) {
           data = linked;
+        } else if (linkErr) {
+          console.error(
+            "[authApi] Failed to link auth_user_id — RLS may be blocking the UPDATE.",
+            "\u2192 Ensure the caregiver_self_update policy exists and caregiver.auth_user_id is linkable.",
+            "Error:", linkErr.code, linkErr.message
+          );
+          // Still return the row without the link so the app doesn't break
+          data = byEmail;
         }
       } else if (byEmail.auth_user_id === authUserId) {
         data = byEmail;
       }
+    } else if (emailErr) {
+      console.error("[authApi] caregiver by-email lookup error:", emailErr.code, emailErr.message);
     }
+  }
+
+  if (!data) {
+    console.warn("[authApi] No caregiver profile found for auth_user_id:", authUserId, "email:", userEmail);
   }
 
   if (data) setCurrentCaregiverId(data.caregiver_id);
