@@ -20,7 +20,7 @@ function uid() {
 
 // ── Component ───────────────────────────────────────────────────────────
 export default function Assistant() {
-  const { caregiverProfile } = useAuth();
+  const { caregiverProfile, session } = useAuth();
   const {
     currentPatient, careCircle, coordinationMetric,
     currentMedications, currentLogs, todaysReminders
@@ -119,6 +119,7 @@ export default function Assistant() {
         message: trimmed,
         patientContext: buildContext(),
         language: lang,
+        accessToken: session?.access_token,
       });
 
       const aiMsg = { id: uid(), role: "assistant", text: responseText, time: new Date() };
@@ -141,7 +142,7 @@ export default function Assistant() {
     } finally {
       setIsLoading(false);
     }
-  }, [inputValue, isLoading, isListening, buildContext, lang, ttsEnabled, dict.error]);
+  }, [inputValue, isLoading, isListening, buildContext, lang, ttsEnabled, dict.error, session]);
 
   // ── Retry failed message ──────────────────────────────────────────────
   const handleRetry = useCallback((retryText) => {

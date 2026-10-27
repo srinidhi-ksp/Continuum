@@ -40,7 +40,7 @@ function Sidebar() {
 
         <NavLink to="/medications" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
           <Pill size={20} />
-          <span>Medications</span>
+          <span>Medications & Appts</span>
         </NavLink>
 
         <NavLink to="/timeline" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>

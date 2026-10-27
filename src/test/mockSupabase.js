@@ -88,6 +88,10 @@ class MockQuery {
     this._single = true;
     return this;
   }
+  maybeSingle() {
+    this._single = true;
+    return this;
+  }
   insert(payload) {
     this._mode = "insert";
     this._payload = payload;
@@ -195,8 +199,11 @@ export function createMockSupabase(fixtureTables) {
 
   return {
     from(table) {
-      if (!tables[table]) tables[table] = [];
-      return new MockQuery(table, tables[table], tables.caregiver || [], tables.patient || []);
+      const targetTable = (table === "invitation" && (!tables.invitation || tables.invitation.length === 0) && tables.care_circle_invite)
+        ? "care_circle_invite"
+        : table;
+      if (!tables[targetTable]) tables[targetTable] = [];
+      return new MockQuery(targetTable, tables[targetTable], tables.caregiver || [], tables.patient || []);
     },
     auth: {
       async getSession() {

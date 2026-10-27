@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { usePatient } from "../context/PatientContext";
 import { createDailyCareLog } from "../lib/dailyCareApi";
+import VoiceInputButton from "../components/VoiceInputButton";
 
 const CARE_TYPES = ["Food", "Water", "Sleep", "Medication", "Mood", "Symptom", "General Note"];
 
@@ -557,7 +558,7 @@ export default function DailyCare() {
             </h1>
 
             <div className="page-description">
-              Record and monitor {currentPatient.name}'s daily care activities.
+              Record and monitor {currentPatient?.name || "the patient"}'s daily care activities.
             </div>
           </div>
         </div>
@@ -567,21 +568,21 @@ export default function DailyCare() {
           <div className="patient-info">
 
             <div className="patient-avatar">
-              {currentPatient.name.charAt(0)}
+              {(currentPatient?.name || "P").charAt(0)}
             </div>
 
             <div>
               <div className="patient-name">
-                {currentPatient.name}
+                {currentPatient?.name || "No Patient Selected"}
               </div>
 
               <div className="patient-details">
-                {currentPatient.age} years
+                {currentPatient?.age ? `${currentPatient.age} years` : "Age not specified"}
                 <span> • </span>
-                {currentPatient.condition}
+                {currentPatient?.condition || "Condition not specified"}
 
                 <span className="active-status">
-                  ● Care circle active
+                  ● {currentPatient ? "Care circle active" : "No active circle"}
                 </span>
               </div>
             </div>
@@ -637,7 +638,10 @@ export default function DailyCare() {
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Any observations..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -659,7 +663,10 @@ export default function DailyCare() {
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <input className="form-input" placeholder="Optional observation" value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -683,7 +690,10 @@ export default function DailyCare() {
                     <input className="form-input" type="time" value={form.wakeTime || ""} onChange={e => f("wakeTime", e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Any sleep observations..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -716,7 +726,10 @@ export default function DailyCare() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Any observations about this medication..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -733,7 +746,10 @@ export default function DailyCare() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Observation / Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Observation / Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Describe the patient's mood or behaviour..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -743,7 +759,10 @@ export default function DailyCare() {
               {careType === "Symptom" && (
                 <>
                   <div className="form-group">
-                    <label className="form-label">Symptom <span className="required">*</span></label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Symptom <span className="required">*</span></label>
+                      <VoiceInputButton currentText={form.symptom || ""} onTranscript={text => f("symptom", text)} />
+                    </div>
                     <input className="form-input" placeholder="e.g. Dizziness, headache, confusion" value={form.symptom || ""} onChange={e => f("symptom", e.target.value)} />
                   </div>
                   <div className="form-group">
@@ -753,7 +772,10 @@ export default function DailyCare() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Describe in detail..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -762,7 +784,10 @@ export default function DailyCare() {
               {/* GENERAL NOTE */}
               {careType === "General Note" && (
                 <div className="form-group">
-                  <label className="form-label">Note <span className="required">*</span></label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <label className="form-label" style={{ margin: 0 }}>Note <span className="required">*</span></label>
+                    <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                  </div>
                   <textarea className="form-textarea" style={{ minHeight: 100 }} placeholder="Write your observation or note..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                 </div>
               )}

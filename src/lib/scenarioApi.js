@@ -43,7 +43,7 @@ export async function fetchAttempts(caregiverId) {
 }
 
 export async function saveAttempt({ scenarioId, optionId, isCorrect, caregiverId }) {
-  const cgId = caregiverId || getCaregiverId();
+  const cgId = getCaregiverId() || caregiverId;
   if (!cgId || !scenarioId || !optionId) {
     throw new Error("caregiverId, scenarioId, and optionId are required.");
   }
@@ -103,7 +103,7 @@ export async function generateScenario(patientId) {
     return data;
   } catch (err) {
     if (err.name === "AbortError") {
-      throw new Error("Scenario generation timed out. Please try again.");
+      throw new Error("Scenario generation timed out. Please try again.", { cause: err });
     }
     if (
       err.message?.includes("Failed to fetch") ||
@@ -111,7 +111,8 @@ export async function generateScenario(patientId) {
     ) {
       throw new Error(
         `Cannot reach the backend at ${BACKEND_URL}. ` +
-          "Make sure the FastAPI server is running."
+          "Make sure the FastAPI server is running.",
+        { cause: err }
       );
     }
     throw err;

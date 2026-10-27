@@ -156,7 +156,6 @@ export async function toggleMedicationActive(medicationId, active) {
 export async function logMedicationDose({
   patientId,
   caregiverId,
-  medicationId,
   medName,
   medDosage,
   status = "Taken",
@@ -164,20 +163,6 @@ export async function logMedicationDose({
 }) {
   const cgId = caregiverId || getCaregiverId();
   const now = new Date().toISOString();
-
-  if (medicationId) {
-    try {
-      await supabase.from("medication_log").insert({
-        medication_id: medicationId,
-        patient_id: patientId,
-        caregiver_id: cgId,
-        status,
-        notes,
-      });
-    } catch {
-      console.warn("[medicationApi] medication_log table may not exist yet — skipping log insert.");
-    }
-  }
 
   // 1. Create time_event
   const eventTitle = `Medicine ${status}: ${medName || "Medication"} ${medDosage || ""}`.trim();
@@ -199,7 +184,6 @@ export async function logMedicationDose({
     .insert({
       patient_id: patientId,
       caregiver_id: cgId,
-      event_id: eventRow?.event_id || null,
       type: "medication",
       quantity: `${medName} ${medDosage || ""}`.trim(),
       symptoms: null,

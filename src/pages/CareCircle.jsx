@@ -37,7 +37,7 @@ const ROLES = ["primary", "family", "secondary", "external"];
 
 export default function CareCircle() {
   const { currentPatient, reloadPatientDetail } = usePatient();
-  const { user } = useAuth();
+  const { caregiverProfile } = useAuth();
 
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,12 +73,12 @@ export default function CareCircle() {
 
   const handleCreateInvite = async (e) => {
     e.preventDefault();
-    if (!currentPatient?.id || !user?.id) return;
+    if (!currentPatient?.id || !caregiverProfile?.caregiver_id) return;
 
     try {
       const res = await createInvitation({
         patientId: currentPatient.id,
-        invitedBy: user.id,
+        invitedBy: caregiverProfile.caregiver_id,
         email: inviteEmail || null,
         phone: invitePhone || null,
         relationship: inviteRelation,

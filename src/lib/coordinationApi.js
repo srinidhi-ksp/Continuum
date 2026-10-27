@@ -7,6 +7,70 @@ function bounded(value, max) {
   return Math.min(max, Math.max(0, value));
 }
 
+export function computeLiveStrainAndScore(features, circleSize = 2) {
+  if (!features) return { strainIndex: 30, score: 70, riskLevel: "moderate", factors: {} };
+
+  // 1. Missed / overdue tasks (25%)
+  const missedOverdue = (features.missed_tasks || 0) + (features.overdue_tasks || 0);
+  const missedFactor = bounded((missedOverdue / 4) * 100, 100);
+
+  // 2. Care workload (20%)
+  const tasksPerDay = features.tasks_per_day || 0;
+  const workloadFactor = bounded((tasksPerDay / 8) * 100, 100);
+
+  // 3. Night interruptions (15%)
+  const nightInt = features.night_interruptions || 0;
+  const nightFactor = bounded((nightInt / 3) * 100, 100);
+
+  // 4. Sleep disruption (15%)
+  let sleepFactor = 30;
+  let sleepUnavailable = false;
+  if (features.avg_sleep_hours != null) {
+    if (features.avg_sleep_hours >= 7.5) sleepFactor = 0;
+    else if (features.avg_sleep_hours >= 7.0) sleepFactor = 20;
+    else if (features.avg_sleep_hours >= 6.0) sleepFactor = 50;
+    else sleepFactor = bounded(((8.0 - features.avg_sleep_hours) / 4) * 100, 100);
+  } else {
+    sleepUnavailable = true;
+  }
+
+  // 5. Task imbalance (15%)
+  const expectedShare = circleSize > 0 ? 1 / circleSize : 0.5;
+  const actualShare = features.task_share != null ? features.task_share : expectedShare;
+  const imbalanceDiff = Math.max(0, actualShare - expectedShare);
+  const imbalanceFactor = bounded((imbalanceDiff / Math.max(0.1, 1 - expectedShare)) * 100, 100);
+
+  // 6. Late logging (10%)
+  const lateLogs = features.late_logs || 0;
+  const lateFactor = bounded((lateLogs / 4) * 100, 100);
+
+  const strainIndex = Math.round(
+    0.25 * missedFactor +
+    0.20 * workloadFactor +
+    0.15 * nightFactor +
+    0.15 * sleepFactor +
+    0.15 * imbalanceFactor +
+    0.10 * lateFactor
+  );
+
+  const score = Math.max(0, Math.min(100, 100 - strainIndex));
+  const riskLevel = score >= 75 ? "low" : score >= 50 ? "moderate" : "elevated";
+
+  return {
+    strainIndex,
+    score,
+    riskLevel,
+    factors: {
+      missedOverdue: Math.round(missedFactor),
+      workload: Math.round(workloadFactor),
+      nightInterruptions: Math.round(nightFactor),
+      sleepDisruption: sleepUnavailable ? "Unavailable" : Math.round(sleepFactor),
+      taskImbalance: Math.round(imbalanceFactor),
+      lateLogging: Math.round(lateFactor),
+    },
+  };
+}
+
 function localDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -110,7 +174,7 @@ export async function aggregateCoordinationFeatures({ patientId, caregiverId, no
 
   const medications = medicationResult.data || [];
   const medicationIds = medications.map((medication) => medication.medication_id);
-  const [scheduleResult, logResult, circleResult, notificationResult, attemptsResult] = await Promise.all([
+  const [scheduleResult, logResult, circleResult, notificationResult, scenarioResult] = await Promise.all([
     medicationIds.length
       ? supabase.from("medication_schedule").select("schedule_id, medication_id, time_of_day").in("medication_id", medicationIds)
       : Promise.resolve({ data: [], error: null }),
@@ -124,7 +188,7 @@ export async function aggregateCoordinationFeatures({ patientId, caregiverId, no
       .from("caregiver_pat")
       .select("caregiver_id")
       .eq("patient_id", patientId)
-      .is("removed_at", null),
+      .eq("status", "active"),
     supabase
       .from("notification")
       .select("notification_id", { count: "exact", head: true })
@@ -137,7 +201,7 @@ export async function aggregateCoordinationFeatures({ patientId, caregiverId, no
       .gte("attempted_at", sinceIso),
   ]);
 
-  for (const result of [scheduleResult, logResult, circleResult, notificationResult, attemptsResult]) {
+  for (const result of [scheduleResult, logResult, circleResult, notificationResult]) {
     if (result.error) throw result.error;
   }
 
@@ -148,8 +212,12 @@ export async function aggregateCoordinationFeatures({ patientId, caregiverId, no
     logs,
     now,
   });
+  const { data: sleepRows, error: sleepError } = await supabase.from("caregiver_sleep_log")
+    .select("hours, sleep_date").eq("caregiver_id", caregiverId)
+    .gte("sleep_date", since.toISOString().slice(0, 10));
+  if (sleepError) throw sleepError;
   const sleepLogs = logs.filter((log) => (log.type || "").toLowerCase() === "sleep");
-  const sleepHours = sleepLogs.map((log) => Number(log.sleep_hours)).filter(Number.isFinite);
+  const sleepHours = (sleepRows || []).map((log) => Number(log.hours)).filter(Number.isFinite);
   const circleSize = (circleResult.data || []).length;
   const caregiverLogCount = logs.filter((log) => log.caregiver_id === caregiverId).length;
   const taskShare = logs.length
@@ -164,32 +232,29 @@ export async function aggregateCoordinationFeatures({ patientId, caregiverId, no
       sleepLogs.filter((log) => isNightTime(new Date(log.created_at))).length,
       15
     ),
-    avg_sleep_hours: bounded(
-      sleepHours.length ? sleepHours.reduce((sum, hours) => sum + hours, 0) / sleepHours.length : 0,
-      14
-    ),
+    avg_sleep_hours: sleepHours.length
+      ? bounded(sleepHours.reduce((sum, hours) => sum + hours, 0) / sleepHours.length, 14)
+      : 7.0,
     task_share: bounded(taskShare, 1),
     notifications_received: bounded(notificationResult.count || 0, 50),
-    scenario_attempts: bounded(attemptsResult.count || 0, 50),
+    scenario_attempts: bounded(scenarioResult?.count || 0, 50),
   };
 }
 
 export async function recalculateCoordinationScore({ patientId, caregiverId, accessToken }) {
-  if (!accessToken) throw new Error("A signed-in Supabase session is required.");
+  if (!accessToken) throw new Error("Your session expired. Log in again before recalculating the score.");
+  if (!patientId || !caregiverId) throw new Error("Select a patient and ensure your caregiver profile is loaded.");
+  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  if (!backendUrl) throw new Error("Score service is not configured. Set VITE_BACKEND_URL.");
   const features = await aggregateCoordinationFeatures({ patientId, caregiverId });
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-  const response = await fetch(`${backendUrl}/ml/predict`, {
+  const response = await fetch(`${backendUrl.replace(/\/$/, "")}/ml/predict`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ ...features, patient_id: patientId, caregiver_id: caregiverId }),
   });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`Score recalculation failed (${response.status}): ${detail || response.statusText}`);
-  }
-  return response.json();
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.detail || data.message || `Score service returned ${response.status}.`);
+  const numericScore = typeof data.score === "number" ? data.score : typeof data.coordination_score === "number" ? data.coordination_score : null;
+  if (numericScore === null) throw new Error("Score service response did not include a numeric score.");
+  return { ...data, score: numericScore };
 }

@@ -35,10 +35,10 @@ export async function fetchCareCircleMembers(patientId) {
   const { data: rows, error } = await supabase
     .from("caregiver_pat")
     .select(
-      "caregiver_id, role, joining_at, removed_at, relationship, status, alert_preference, alert_priority, assigned_responsibilities, caregiver:caregiver_id ( caregiver_id, full_name, email, phone, profile_image )"
+      "caregiver_id, role, joining_at, relationship, status, alert_preference, alert_priority, assigned_responsibilities, caregiver:caregiver_id ( caregiver_id, full_name, email, phone, profile_image )"
     )
     .eq("patient_id", patientId)
-    .is("removed_at", null);
+    .eq("status", "active");
 
   if (error) {
     // If the columns don't exist yet (migration not applied), fall back to
@@ -47,9 +47,9 @@ export async function fetchCareCircleMembers(patientId) {
       console.warn("[careCircleApi] Extended columns not yet migrated — fetching base columns:", error.message);
       const { data: baseRows, error: baseErr } = await supabase
         .from("caregiver_pat")
-        .select("caregiver_id, role, joining_at, removed_at, caregiver:caregiver_id ( caregiver_id, full_name, email, phone )")
+        .select("caregiver_id, role, joining_at, caregiver:caregiver_id ( caregiver_id, full_name, email, phone )")
         .eq("patient_id", patientId)
-        .is("removed_at", null);
+        .eq("status", "active");
 
       if (baseErr) {
         console.error("[careCircleApi] Failed to fetch care circle members:", baseErr);
@@ -108,7 +108,7 @@ export async function updateCareCircleMember(patientId, caregiverId, updates) {
 export async function removeCareCircleMember(patientId, caregiverId) {
   const { error } = await supabase
     .from("caregiver_pat")
-    .update({ removed_at: new Date().toISOString() })
+    .update({ status: "revoked" })
     .eq("patient_id", patientId)
     .eq("caregiver_id", caregiverId);
 

@@ -71,7 +71,8 @@ export async function fetchTimelineEvents(patientId, targetDate = null) {
 }
 
 export async function addTimelineComment(eventId, commentText, caregiverId = null) {
-  const cgId = caregiverId || getCaregiverId();
+  // Inserts must use caregiver_id from loaded profile, never form state
+  const cgId = getCaregiverId() || caregiverId;
   if (!eventId || !commentText) {
     throw new Error("eventId and commentText are required.");
   }
@@ -101,4 +102,28 @@ export async function addTimelineComment(eventId, commentText, caregiverId = nul
     text: data.commend_text,
     createdAt: data.created_at,
   };
+}
+
+export async function logTimelineEvent({ patient_id, caregiver_id, title, event_type }) {
+  // Inserts must use caregiver_id from loaded profile
+  const cgId = getCaregiverId() || caregiver_id;
+  const payload = {
+    patient_id,
+    caregiver_id: cgId,
+    title,
+    event_type: event_type || "general",
+    created_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("time_event")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[timelineApi] Failed to log timeline event:", error);
+    throw error;
+  }
+  return data;
 }

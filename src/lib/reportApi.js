@@ -50,7 +50,7 @@ export async function collectReportData({ patientId, startDate, endDate }) {
         .from("caregiver_pat")
         .select("role, caregiver:caregiver_id ( full_name, email )")
         .eq("patient_id", patientId)
-        .is("removed_at", null),
+        .eq("status", "active"),
     ]);
 
   return {
@@ -84,7 +84,7 @@ export async function collectWeeklyData(patientId) {
       .from("caregiver_pat")
       .select("role, caregiver:caregiver_id ( full_name, email )")
       .eq("patient_id", patientId)
-      .is("removed_at", null),
+      .eq("status", "active"),
     supabase.from("medication").select("*").eq("patient_id", patientId).eq("active", true),
   ]);
 

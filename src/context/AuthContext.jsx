@@ -6,10 +6,45 @@ import {
   signOutCaregiver,
   fetchCaregiverProfile,
 } from "../lib/authApi";
+import { createPatient } from "../lib/patientApi";
+import { createInvitation, acceptInvitation } from "../lib/invitationApi";
 
 const AuthContext = createContext(null);
 
 const ONBOARDING_KEY = "continuum_needs_onboarding";
+
+const safeStorage =
+  typeof window !== "undefined" && window.sessionStorage
+    ? window.sessionStorage
+    : {
+        getItem: () => null,
+        setItem: () => {},
+        removeItem: () => {},
+      };
+
+async function applyPendingSetup(caregiverId) {
+  if (!caregiverId) return null;
+  const raw = safeStorage.getItem("continuum_pending_setup");
+  if (!raw) return null;
+  try {
+    const pending = JSON.parse(raw);
+    if (pending.type === "new_patient" && pending.patientData) {
+      const patient = await createPatient({
+        ...pending.patientData,
+        caregiverId,
+      });
+      safeStorage.removeItem("continuum_pending_setup");
+      return { type: "new_patient", patient };
+    } else if (pending.type === "join_circle" && pending.token) {
+      const res = await acceptInvitation(pending.token, caregiverId, pending.relationship);
+      safeStorage.removeItem("continuum_pending_setup");
+      return { type: "join_circle", ...res };
+    }
+  } catch (err) {
+    console.warn("[AuthContext] Could not auto-apply pending setup:", err);
+  }
+  return null;
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -18,13 +53,13 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboardingState] = useState(false);
 
-  // Persist needsOnboarding in localStorage so it survives page refresh
+  // Persist needsOnboarding in sessionStorage so it stays scoped to this tab
   const setNeedsOnboarding = useCallback((val) => {
     setNeedsOnboardingState(val);
     if (val) {
-      localStorage.setItem(ONBOARDING_KEY, "1");
+      safeStorage.setItem(ONBOARDING_KEY, "1");
     } else {
-      localStorage.removeItem(ONBOARDING_KEY);
+      safeStorage.removeItem(ONBOARDING_KEY);
     }
   }, []);
 
@@ -38,14 +73,15 @@ export function AuthProvider({ children }) {
         if (currentSession?.user && mounted) {
           setSession(currentSession);
           setUser(currentSession.user);
-          setCurrentCaregiverId(currentSession.user.id);
-
           const profile = await fetchCaregiverProfile(currentSession.user.id);
+          setCurrentCaregiverId(profile?.caregiver_id || null);
           if (mounted) {
             setCaregiverProfile(profile);
-            // Restore onboarding flag from localStorage
-            const pendingOnboarding = localStorage.getItem(ONBOARDING_KEY) === "1";
-            setNeedsOnboardingState(pendingOnboarding);
+            if (profile?.caregiver_id) {
+              await applyPendingSetup(profile.caregiver_id);
+            }
+            const pendingOnboarding = safeStorage.getItem(ONBOARDING_KEY) === "1";
+            setNeedsOnboardingState(pendingOnboarding || !profile);
           }
         }
       } catch (err) {
@@ -64,15 +100,20 @@ export function AuthProvider({ children }) {
       setUser(newUser);
 
       if (newUser) {
-        setCurrentCaregiverId(newUser.id);
         const profile = await fetchCaregiverProfile(newUser.id);
-        if (mounted) setCaregiverProfile(profile);
+        setCurrentCaregiverId(profile?.caregiver_id || null);
+        if (mounted) {
+          setCaregiverProfile(profile);
+          if (profile?.caregiver_id) {
+            await applyPendingSetup(profile.caregiver_id);
+          }
+        }
       } else {
         setCurrentCaregiverId(null);
         if (mounted) {
           setCaregiverProfile(null);
           setNeedsOnboardingState(false);
-          localStorage.removeItem(ONBOARDING_KEY);
+          safeStorage.removeItem(ONBOARDING_KEY);
         }
       }
     });
@@ -90,20 +131,88 @@ export function AuthProvider({ children }) {
       setUser(res.user);
       setSession(res.session);
       setCaregiverProfile(res.caregiver);
+      if (res.caregiver?.caregiver_id) {
+        await applyPendingSetup(res.caregiver.caregiver_id);
+      }
+      setNeedsOnboarding(!res.caregiver);
       return res;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [setNeedsOnboarding]);
 
   const register = useCallback(async (email, password, fullName, phone, language) => {
     setIsLoading(true);
     try {
       const res = await signUpCaregiver({ email, password, fullName, phone, language });
-      setUser(res.user);
-      setSession(res.session);
-      setCaregiverProfile(res.caregiver);
-      setNeedsOnboarding(true);
+      if (res.session) {
+        setUser(res.user);
+        setSession(res.session);
+        setCaregiverProfile(res.caregiver);
+        setNeedsOnboarding(!res.caregiver);
+      }
+      return res;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setNeedsOnboarding]);
+
+  const registerWithSetup = useCallback(async ({
+    email,
+    password,
+    fullName,
+    phone,
+    language,
+    setupType,
+    patientData,
+    joinData,
+  }) => {
+    setIsLoading(true);
+    try {
+      const res = await signUpCaregiver({ email, password, fullName, phone, language });
+      if (res.session && res.caregiver) {
+        setUser(res.user);
+        setSession(res.session);
+        setCaregiverProfile(res.caregiver);
+        setCurrentCaregiverId(res.caregiver.caregiver_id);
+
+        let createdPatient = null;
+        let generatedInvite = null;
+
+        if (setupType === "new_patient" && patientData) {
+          createdPatient = await createPatient({
+            ...patientData,
+            caregiverId: res.caregiver.caregiver_id,
+          });
+          try {
+            generatedInvite = await createInvitation({
+              patientId: createdPatient.patient_id,
+              invitedBy: res.caregiver.caregiver_id,
+              relationship: "Family Member",
+              role: "family",
+            });
+          } catch (invErr) {
+            console.warn("[AuthContext] Auto-invite creation warning:", invErr);
+          }
+        } else if (setupType === "join_circle" && joinData?.token) {
+          await acceptInvitation(joinData.token, res.caregiver.caregiver_id, joinData.relationship);
+        }
+
+        setNeedsOnboarding(false);
+        return { ...res, patient: createdPatient, invite: generatedInvite };
+      } else if (res.needsEmailConfirmation) {
+        safeStorage.setItem(
+          "continuum_pending_setup",
+          JSON.stringify({
+            type: setupType,
+            patientData,
+            token: joinData?.token,
+            relationship: joinData?.relationship,
+            email,
+          })
+        );
+        return res;
+      }
       return res;
     } finally {
       setIsLoading(false);
@@ -141,6 +250,7 @@ export function AuthProvider({ children }) {
         completeOnboarding,
         login,
         register,
+        registerWithSetup,
         logout,
         reloadProfile: async () => {
           if (user?.id) {

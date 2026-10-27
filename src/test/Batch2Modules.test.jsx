@@ -74,6 +74,8 @@ import {
   buildHealthReportPDF,
 } from "../lib/reportApi";
 
+import { recalculateCoordinationScore } from "../lib/coordinationApi";
+
 const PATIENT_1 = "22222222-2222-2222-2222-222222222201";
 const CAREGIVER_1 = "11111111-1111-1111-1111-111111111101";
 
@@ -206,15 +208,15 @@ describe("generateScenario (AI scenario generation)", () => {
   let originalFetch;
 
   beforeEach(() => {
-    originalFetch = global.fetch;
+    originalFetch = globalThis.fetch;
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
   });
 
   it("calls /ai/assistant/generate-scenario with patient_id and returns {card, options}", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => MOCK_SCENARIO_RESPONSE,
     });
@@ -222,7 +224,7 @@ describe("generateScenario (AI scenario generation)", () => {
     const result = await generateScenario(PATIENT_1);
 
     // Correct endpoint called
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining("/ai/assistant/generate-scenario"),
       expect.objectContaining({
         method: "POST",
@@ -252,7 +254,7 @@ describe("generateScenario (AI scenario generation)", () => {
   });
 
   it("throws a descriptive error when backend returns non-OK status", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 503,
       statusText: "Service Unavailable",
@@ -265,7 +267,7 @@ describe("generateScenario (AI scenario generation)", () => {
   });
 
   it("throws a network error when fetch itself rejects", async () => {
-    global.fetch = vi.fn().mockRejectedValue(
+    globalThis.fetch = vi.fn().mockRejectedValue(
       Object.assign(new TypeError("Failed to fetch"), { name: "TypeError" })
     );
 
@@ -316,5 +318,85 @@ describe("Health Report API", () => {
     const doc = buildHealthReportPDF(data, "2026-08-01", "2026-08-31");
     // jsPDF is mocked in tests; just verify the function completes without throwing
     expect(doc).toBeDefined();
+  });
+});
+
+// ── Coordination Score (/ml/predict) ──────────────────────────────────────────
+
+describe("recalculateCoordinationScore (/ml/predict)", () => {
+  let originalFetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("posts aggregated features to /ml/predict and returns coordination score", async () => {
+    const mockPredictResponse = {
+      score: 75.0,
+      coordination_score: 75.0,
+      risk_level: "low",
+      recommendation: "Care coordination is well-balanced across active members.",
+      strain_index: 25.0,
+    };
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockPredictResponse,
+    });
+
+    const result = await recalculateCoordinationScore({
+      patientId: PATIENT_1,
+      caregiverId: CAREGIVER_1,
+      accessToken: "mock-supabase-jwt-token",
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/ml/predict"),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          Authorization: "Bearer mock-supabase-jwt-token",
+        }),
+      })
+    );
+
+    const callBody = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(callBody.patient_id).toBe(PATIENT_1);
+    expect(callBody.caregiver_id).toBe(CAREGIVER_1);
+    expect(typeof callBody.tasks_per_day).toBe("number");
+    expect(typeof callBody.task_share).toBe("number");
+    expect(result.score).toBe(75.0);
+    expect(result.risk_level).toBe("low");
+  });
+
+  it("fails fast if accessToken is missing", async () => {
+    await expect(
+      recalculateCoordinationScore({
+        patientId: PATIENT_1,
+        caregiverId: CAREGIVER_1,
+        accessToken: null,
+      })
+    ).rejects.toThrow(/session expired/i);
+  });
+
+  it("handles backend error response cleanly", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ detail: "Access denied for caregiver" }),
+    });
+
+    await expect(
+      recalculateCoordinationScore({
+        patientId: PATIENT_1,
+        caregiverId: CAREGIVER_1,
+        accessToken: "invalid-token",
+      })
+    ).rejects.toThrow("Access denied for caregiver");
   });
 });

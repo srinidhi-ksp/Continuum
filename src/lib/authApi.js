@@ -1,118 +1,110 @@
 import { supabase, setCurrentCaregiverId } from "./supabaseClient";
 
-export async function fetchCaregiverProfile(caregiverId) {
-  if (!caregiverId) return null;
-  const { data, error } = await supabase
+export async function fetchCaregiverProfile(authUserId) {
+  if (!authUserId) return null;
+  let { data, error } = await supabase
     .from("caregiver")
     .select("*")
-    .eq("caregiver_id", caregiverId)
-    .single();
-
-  if (error && error.code !== "PGRST116") {
-    console.warn("[authApi] Failed to fetch caregiver profile:", error.message);
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    const fallback = await supabase
+      .from("caregiver")
+      .select("*")
+      .eq("caregiver_id", authUserId)
+      .maybeSingle();
+    data = fallback.data;
   }
+  if (data) setCurrentCaregiverId(data.caregiver_id);
   return data || null;
 }
 
-export async function createCaregiverProfile({ caregiverId, fullName, email, phone, language }) {
-  const payload = {
-    caregiver_id: caregiverId,
-    full_name: fullName,
-    email: email,
-    phone: phone || null,
-    language: language || null,
-    // Supabase Auth manages passwords — password_hash is a legacy NOT NULL column
-    // kept for schema compatibility; it must be non-null but is never used for auth.
-    password_hash: "SUPABASE_AUTH_MANAGED",
-    updated_at: new Date().toISOString(),
-  };
+export async function createCaregiverProfile({ caregiverId, authUserId = caregiverId, fullName, email, phone, language }) {
+  if (!authUserId) throw new Error("Authenticated user ID is required to create a caregiver profile.");
+  const existing = await fetchCaregiverProfile(authUserId);
+  if (existing) return existing;
 
-  const { data, error } = await supabase
-    .from("caregiver")
-    .upsert(payload, { onConflict: "caregiver_id" })
-    .select()
-    .single();
+  // Check if a caregiver row with this email already exists (e.g. from seed or prior setup)
+  if (email) {
+    const { data: byEmail } = await supabase
+      .from("caregiver")
+      .select("*")
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle();
 
-  if (error) {
-    console.error("[authApi] Failed to create/upsert caregiver profile:", error);
-    throw error;
+    if (byEmail) {
+      const { data: updated, error: upError } = await supabase
+        .from("caregiver")
+        .update({
+          auth_user_id: authUserId,
+          full_name: fullName?.trim() || byEmail.full_name,
+          phone: phone || byEmail.phone,
+          language: language || byEmail.language,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("caregiver_id", byEmail.caregiver_id)
+        .select("*")
+        .single();
+      if (!upError && updated) {
+        setCurrentCaregiverId(updated.caregiver_id);
+        return updated;
+      }
+    }
   }
+
+  const payload = {
+    auth_user_id: authUserId,
+    full_name: (fullName || email?.split("@")[0] || "Caregiver").trim(),
+    email: email.trim().toLowerCase(),
+    phone: phone || null,
+    language: language || "en",
+  };
+  const { data, error } = await supabase.from("caregiver").insert(payload).select("*").single();
+  if (error) throw error;
   setCurrentCaregiverId(data.caregiver_id);
   return data;
 }
 
 export async function signUpCaregiver({ email, password, fullName, phone, language }) {
-  // Step 1: Create Supabase Auth user
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email,
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim().toLowerCase(),
     password,
-    options: {
-      data: { full_name: fullName, phone },
-    },
+    options: { data: { full_name: fullName, phone } },
   });
-
-  if (authError) throw authError;
-
-  const user = authData?.user;
-  let caregiverProfile = null;
-
-  if (user) {
-    setCurrentCaregiverId(user.id);
-
-    // Step 2: Create caregiver profile row using the auth user's UUID
-    // This MUST happen before any caregiver_pat inserts (FK constraint)
-    try {
-      caregiverProfile = await createCaregiverProfile({
-        caregiverId: user.id,
-        fullName: fullName || email.split("@")[0],
-        email,
-        phone,
-        language,
-      });
-    } catch (profileErr) {
-      console.warn("[authApi] Profile creation failed:", profileErr.message);
-      // Return a temporary in-memory profile — onboarding will retry on submit
-      caregiverProfile = {
-        caregiver_id: user.id,
-        full_name: fullName || email.split("@")[0],
-        email,
-        phone,
-        language,
-      };
-    }
+  if (error) throw error;
+  const user = data?.user;
+  let caregiver = null;
+  if (user && data.session) {
+    caregiver = await createCaregiverProfile({
+      authUserId: user.id, fullName, email, phone, language,
+    });
   }
-
-  return { user, caregiver: caregiverProfile, session: authData?.session };
+  return { user, caregiver, session: data?.session, needsEmailConfirmation: !!user && !data?.session };
 }
 
 export async function signInCaregiver({ email, password }) {
-  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-    email,
-    password,
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(), password,
   });
-
-  if (authError) throw authError;
-
-  const user = authData?.user;
-  if (user) {
-    setCurrentCaregiverId(user.id);
-    let profile = await fetchCaregiverProfile(user.id);
-    if (!profile) {
-      // First login after email-confirmation flow (profile may not yet exist)
-      profile = await createCaregiverProfile({
-        caregiverId: user.id,
-        fullName: user.user_metadata?.full_name || email.split("@")[0],
-        email,
-        phone: user.user_metadata?.phone || null,
-      });
-    }
-    return { user, caregiver: profile, session: authData?.session };
+  if (error) throw error;
+  const user = data?.user;
+  if (!user) return { user: null, caregiver: null, session: null };
+  let caregiver = await fetchCaregiverProfile(user.id);
+  if (!caregiver) {
+    caregiver = await createCaregiverProfile({
+      authUserId: user.id,
+      fullName: user.user_metadata?.full_name,
+      email: user.email || email,
+      phone: user.user_metadata?.phone,
+    });
   }
-
-  return { user: null, caregiver: null, session: null };
+  setCurrentCaregiverId(caregiver.caregiver_id);
+  return { user, caregiver, session: data.session };
 }
 
 export async function signOutCaregiver() {
   const { error } = await supabase.auth.signOut();
-  if (error) console.warn("[authApi] Error signing out:", error.message);
+  if (error) throw error;
+  setCurrentCaregiverId(null);
 }

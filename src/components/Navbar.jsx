@@ -6,12 +6,15 @@ import AuthModal from "./AuthModal";
 
 const ROUTE_TITLES = {
   "/": "Dashboard",
-  "/patient": "Patient",
-  "/daily-care": "Daily Care",
-  "/medications": "Medications",
-  "/timeline": "Timeline",
-  "/care-circle": "Care Circle",
-  "/settings": "Settings",
+  "/patient": "Patient Profile",
+  "/daily-care": "Daily Care Tracking",
+  "/medications": "Medications & Appointments",
+  "/timeline": "Care Timeline",
+  "/care-circle": "Care Circle Management",
+  "/reports": "Health Reports",
+  "/learn": "Scenario Micro-Learning",
+  "/assistant": "AI Caregiver Assistant",
+  "/settings": "Settings & Preferences",
 };
 
 function Navbar() {
