@@ -399,4 +399,31 @@ describe("recalculateCoordinationScore (/ml/predict)", () => {
       })
     ).rejects.toThrow("Access denied for caregiver");
   });
+
+  it("handles unreachable network error cleanly", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(
+      recalculateCoordinationScore({
+        patientId: PATIENT_1,
+        caregiverId: CAREGIVER_1,
+        accessToken: "valid-token",
+      })
+    ).rejects.toThrow(/Cannot reach the Score service/i);
+  });
+
+  it("fails if response did not include a numeric score", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "ok" }),
+    });
+
+    await expect(
+      recalculateCoordinationScore({
+        patientId: PATIENT_1,
+        caregiverId: CAREGIVER_1,
+        accessToken: "valid-token",
+      })
+    ).rejects.toThrow(/did not include a numeric score/i);
+  });
 });

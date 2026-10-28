@@ -194,15 +194,18 @@ function Dashboard() {
   ) || currentPatient?.created_by === caregiverProfile?.caregiver_id;
 
   // Live Score and Strain Index calculation over rolling 7-day window
+  const hasSavedMetric = coordinationMetric?.score != null;
   const liveStats = computeLiveStrainAndScore(coordinationMetric?.features, careCircle.length);
-  const score = coordinationMetric?.score ?? liveStats.score;
-  const strainIndex = liveStats.strainIndex;
-  const riskLevel = coordinationMetric?.risk_level ?? liveStats.riskLevel;
+  const score = hasSavedMetric ? coordinationMetric.score : null;
+  const strainIndex = hasSavedMetric ? (coordinationMetric?.strain_index ?? liveStats.strainIndex) : liveStats.strainIndex;
+  const riskLevel = coordinationMetric?.risk_level ?? (hasSavedMetric ? liveStats.riskLevel : null);
   const recommendation =
     coordinationMetric?.recommendation ??
-    "Care coordination is active. Monitor daily care logging and task distribution.";
+    (hasSavedMetric
+      ? "Care coordination is active. Monitor daily care logging and task distribution."
+      : "No model prediction available yet. Click 'Recalculate Score' to generate live metric.");
 
-  const isElevated = riskLevel === "elevated" || strainIndex > 50;
+  const isElevated = riskLevel === "elevated" || (strainIndex != null && strainIndex > 50);
 
   const completed = todaysReminders.filter((r) => r.status === "completed").length;
   const upcoming = todaysReminders.filter((r) => r.status === "upcoming").length;
@@ -218,13 +221,15 @@ function Dashboard() {
     setRecalculateError("");
     setRecalculateNotice("");
     try {
-      await recalculateCoordinationScore({
+      const result = await recalculateCoordinationScore({
         patientId: currentPatient.id,
         caregiverId: caregiverProfile?.caregiver_id,
         accessToken: session?.access_token,
       });
-      await reloadPatientDetail();
-      setRecalculateNotice("Score recalculated.");
+      if (reloadPatientDetail) {
+        await reloadPatientDetail();
+      }
+      setRecalculateNotice(`Score recalculated: ${Math.round(result.score)}/100 (${result.risk_level || "active"}).`);
     } catch (error) {
       setRecalculateError(error.message || "Could not recalculate the score.");
     } finally {
@@ -428,11 +433,18 @@ function Dashboard() {
                   strokeLinejoin="round"
                 />
               </svg>
-              <p className="wt-card__label wt-capitalize">{riskLevel} risk · Strain Index: {strainIndex}/100</p>
+              <p className="wt-card__label wt-capitalize">{riskLevel || "active"} risk · Strain Index: {strainIndex != null ? `${strainIndex}/100` : "N/A"}</p>
               {!isElevated && <p className="wt-card__note">{recommendation}</p>}
             </>
           ) : (
-            <p className="wt-card__label">No coordination score yet today.</p>
+            <div style={{ padding: "8px 0" }}>
+              <p className="wt-card__big" style={{ fontSize: 24, color: "var(--text-faint)" }}>
+                No score yet
+              </p>
+              <p className="wt-card__label" style={{ marginTop: 4 }}>
+                Click below to compute a live prediction with the trained model.
+              </p>
+            </div>
           )}
           <button
             type="button"
@@ -443,8 +455,8 @@ function Dashboard() {
             <RefreshCw size={15} className={isRecalculating ? "wt-spin" : ""} />
             {isRecalculating ? "Recalculating…" : "Recalculate Score"}
           </button>
-          {recalculateError && <p className="wt-card__note" role="alert">{recalculateError}</p>}
-          {recalculateNotice && <p className="wt-card__note" role="status">{recalculateNotice}</p>}
+          {recalculateError && <p className="wt-card__note" role="alert" style={{ color: "var(--danger)" }}>{recalculateError}</p>}
+          {recalculateNotice && <p className="wt-card__note" role="status" style={{ color: "var(--success)" }}>{recalculateNotice}</p>}
         </div>
       </div>
 

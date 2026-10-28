@@ -244,14 +244,21 @@ export async function aggregateCoordinationFeatures({ patientId, caregiverId, no
 export async function recalculateCoordinationScore({ patientId, caregiverId, accessToken }) {
   if (!accessToken) throw new Error("Your session expired. Log in again before recalculating the score.");
   if (!patientId || !caregiverId) throw new Error("Select a patient and ensure your caregiver profile is loaded.");
-  const backendUrl = import.meta.env.VITE_BACKEND_URL;
-  if (!backendUrl) throw new Error("Score service is not configured. Set VITE_BACKEND_URL.");
+  const backendUrl = (import.meta.env.VITE_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
   const features = await aggregateCoordinationFeatures({ patientId, caregiverId });
-  const response = await fetch(`${backendUrl.replace(/\/$/, "")}/ml/predict`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({ ...features, patient_id: patientId, caregiver_id: caregiverId }),
-  });
+  let response;
+  try {
+    response = await fetch(`${backendUrl}/ml/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ ...features, patient_id: patientId, caregiver_id: caregiverId }),
+    });
+  } catch (err) {
+    if (err.message?.includes("Failed to fetch") || err.name === "TypeError") {
+      throw new Error(`Cannot reach the Score service at ${backendUrl}. Make sure the backend server is running.`, { cause: err });
+    }
+    throw err;
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail || data.message || `Score service returned ${response.status}.`);
   const numericScore = typeof data.score === "number" ? data.score : typeof data.coordination_score === "number" ? data.coordination_score : null;

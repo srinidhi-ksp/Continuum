@@ -7,8 +7,7 @@ export async function askCaregiverAssistant({ message, patientContext = {}, lang
   if (!text) throw new Error("Enter a question about care coordination.");
   if (OUT_OF_SCOPE.test(text)) return "I can help with patient care coordination and safe caregiving only, not general-knowledge or out-of-scope questions.";
   if (MEDICAL_DECISION.test(text)) return "I cannot recommend, prescribe, start, stop, or change medication or dosage. Please contact the patient’s prescribing physician or pharmacist for all medication guidance. If this may be urgent, seek local emergency medical care immediately.";
-  const backend = import.meta.env.VITE_BACKEND_URL;
-  if (!backend) throw new Error("AI assistant is not configured. Set VITE_BACKEND_URL to your backend URL.");
+  const backend = (import.meta.env.VITE_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {

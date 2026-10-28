@@ -78,7 +78,7 @@ export async function saveAttempt({ scenarioId, optionId, isCorrect, caregiverId
 export async function generateScenario(patientId) {
   if (!patientId) throw new Error("patientId is required to generate a scenario.");
 
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+  const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60_000); // 60 s — LLM may be slow
