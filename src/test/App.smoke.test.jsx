@@ -32,6 +32,8 @@ vi.mock("../lib/supabaseClient", () => {
     CURRENT_CAREGIVER_ID: fixtures.CURRENT_CAREGIVER_ID,
     getCaregiverId: () => activeId,
     setCurrentCaregiverId: (id) => { if (id) activeId = id; },
+    hasSupabaseConfig: true,
+    isLocalMode: false,
   };
 });
 

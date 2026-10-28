@@ -1,11 +1,16 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, AlertTriangle, Users, CheckCircle, RefreshCw } from "lucide-react";
+import {
+  ArrowRight, AlertTriangle, Users, CheckCircle, RefreshCw,
+  Plus, Check, Play, UserCheck, X
+} from "lucide-react";
 import { usePatient } from "../context/PatientContext";
 import { useAuth } from "../context/AuthContext";
 import { threadColorFor, initialFor } from "../lib/caregiverColors";
 import { careLogTitle } from "../lib/mappers";
-import { recalculateCoordinationScore } from "../lib/coordinationApi";
+import { recalculateCoordinationScore, computeLiveStrainAndScore } from "../lib/coordinationApi";
+import { assignTask, reassignTask, setTaskStatus } from "../lib/taskApi";
 import { useState } from "react";
+import OnboardingWizard from "../components/OnboardingWizard";
 
 function greetingForNow() {
   const hour = new Date().getHours();
@@ -77,6 +82,11 @@ function PriorityBanner({ recommendation, missedCount, careCircle }) {
   );
 }
 
+function isTaskOverdue(task) {
+  if (!task.due_at) return false;
+  if (task.status === "completed" || task.status === "cancelled") return false;
+  return new Date(task.due_at) < new Date();
+}
 function Dashboard() {
   const {
     currentPatient,
@@ -84,44 +94,142 @@ function Dashboard() {
     coordinationMetric,
     currentLogs,
     todaysReminders,
+    patientTasks,
+    myTasks,
+    isLoading,
     isDetailLoading,
+    loadError,
+    reloadPatients,
     reloadPatientDetail,
+    reloadPatientTasks,
   } = usePatient();
   const { caregiverProfile, user, session } = useAuth();
+
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [recalculateError, setRecalculateError] = useState("");
   const [recalculateNotice, setRecalculateNotice] = useState("");
 
-  if (!currentPatient) return null;
+  // Onboarding wizard modal state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingType, setOnboardingType] = useState("new_patient");
 
-  const score = coordinationMetric?.score ?? null;
-  const riskLevel = coordinationMetric?.risk_level ?? null;
+  // Tasks state
+  const [taskTab, setTaskTab] = useState("my"); // "my" | "all"
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [reassigningTask, setReassigningTask] = useState(null);
+  const [reassignTargetCaregiver, setReassignTargetCaregiver] = useState("");
+  const [taskActionLoading, setTaskActionLoading] = useState(false);
+  const [taskActionError, setTaskActionError] = useState("");
+
+  // New task form state
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDesc, setNewTaskDesc] = useState("");
+  const [newTaskCategory, setNewTaskCategory] = useState("medication");
+  const [newTaskPriority, setNewTaskPriority] = useState("normal");
+  const [newTaskDue, setNewTaskDue] = useState("");
+  const [newTaskAssignee, setNewTaskAssignee] = useState("");
+  const [newTaskEssential, setNewTaskEssential] = useState(false);
+
+  // Action Path suggestions state
+  const [actionDecisions, setActionDecisions] = useState({});
+  const handleDecision = (actionId, decision) => {
+    setActionDecisions((prev) => ({ ...prev, [actionId]: decision }));
+  };
+
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "50vh", color: "#64748b" }}>
+        <RefreshCw size={22} style={{ marginRight: 10, animation: "spin 1s linear infinite" }} />
+        <span>Loading care dashboard from Supabase…</span>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <section style={{ padding: 32, maxWidth: 640, margin: "40px auto", textAlign: "center", background: "white", borderRadius: 16, border: "1px solid #fee2e2" }}>
+        <AlertTriangle size={36} color="#ef4444" style={{ marginBottom: 12 }} />
+        <h2 style={{ fontSize: 18, color: "#991b1b", margin: "0 0 8px" }}>Could not load patients</h2>
+        <p style={{ fontSize: 14, color: "#64748b", marginBottom: 20 }}>{loadError}</p>
+        <button onClick={reloadPatients} className="wt-btn wt-btn--primary">Retry</button>
+      </section>
+    );
+  }
+
+  if (!currentPatient) {
+    return (
+      <section style={{ padding: 40, maxWidth: 680, margin: "40px auto", background: "white", borderRadius: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.05)", border: "1px solid #e2e8f0", textAlign: "center" }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(91, 87, 217, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: "#5b57d9" }}>
+          <Users size={28} />
+        </div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>Welcome to CONTINUUM</h1>
+        <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 24px", lineHeight: 1.6 }}>
+          No patient is linked to your caregiver account yet. Start by setting up a new patient care circle or joining an existing circle via invitation link.
+        </p>
+        <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            onClick={() => { setOnboardingType("new_patient"); setShowOnboarding(true); }}
+            className="wt-btn wt-btn--primary"
+            style={{ padding: "12px 24px", fontSize: 14, borderRadius: 10, cursor: "pointer" }}
+          >
+            + Create New Patient / Care Circle
+          </button>
+          <button
+            onClick={() => { setOnboardingType("join_circle"); setShowOnboarding(true); }}
+            className="wt-btn wt-btn--ghost"
+            style={{ padding: "12px 24px", fontSize: 14, borderRadius: 10, cursor: "pointer", border: "1px solid #cbd5e1" }}
+          >
+            Join Existing Circle via Invite
+          </button>
+        </div>
+        {showOnboarding && (
+          <OnboardingWizard initialType={onboardingType} onClose={() => setShowOnboarding(false)} />
+        )}
+      </section>
+    );
+  }
+
+  const isPrimaryCaregiver = careCircle.some(
+    (c) => c.id === caregiverProfile?.caregiver_id && c.role === "primary"
+  ) || currentPatient?.created_by === caregiverProfile?.caregiver_id;
+
+  // Live Score and Strain Index calculation over rolling 7-day window
+  const hasSavedMetric = coordinationMetric?.score != null;
+  const liveStats = computeLiveStrainAndScore(coordinationMetric?.features, careCircle.length);
+  const score = hasSavedMetric ? coordinationMetric.score : null;
+  const strainIndex = hasSavedMetric ? (coordinationMetric?.strain_index ?? liveStats.strainIndex) : liveStats.strainIndex;
+  const riskLevel = coordinationMetric?.risk_level ?? (hasSavedMetric ? liveStats.riskLevel : null);
   const recommendation =
     coordinationMetric?.recommendation ??
-    "No coordination insight yet — check back once today's activity is logged.";
+    (hasSavedMetric
+      ? "Care coordination is active. Monitor daily care logging and task distribution."
+      : "No model prediction available yet. Click 'Recalculate Score' to generate live metric.");
 
-  const isElevated = riskLevel === "elevated";
+  const isElevated = riskLevel === "elevated" || (strainIndex != null && strainIndex > 50);
 
   const completed = todaysReminders.filter((r) => r.status === "completed").length;
   const upcoming = todaysReminders.filter((r) => r.status === "upcoming").length;
   const missed = todaysReminders.filter((r) => r.status === "missed").length;
 
   const recentActivity = currentLogs.slice(0, isElevated ? 3 : 4);
-  const firstName = currentPatient.name.split(" ")[0];
+  const firstName = currentPatient?.name ? currentPatient.name.split(" ")[0] : "Caregiver";
   const caregiverFirst = caregiverProfile?.full_name?.split(" ")[0] || "Caregiver";
 
   async function handleRecalculateScore() {
+    if (!currentPatient?.id) return;
     setIsRecalculating(true);
     setRecalculateError("");
     setRecalculateNotice("");
     try {
-      await recalculateCoordinationScore({
+      const result = await recalculateCoordinationScore({
         patientId: currentPatient.id,
-        caregiverId: user.id,
+        caregiverId: caregiverProfile?.caregiver_id,
         accessToken: session?.access_token,
       });
-      await reloadPatientDetail();
-      setRecalculateNotice("Score recalculated.");
+      if (reloadPatientDetail) {
+        await reloadPatientDetail();
+      }
+      setRecalculateNotice(`Score recalculated: ${Math.round(result.score)}/100 (${result.risk_level || "active"}).`);
     } catch (error) {
       setRecalculateError(error.message || "Could not recalculate the score.");
     } finally {
@@ -129,10 +237,99 @@ function Dashboard() {
     }
   }
 
-  // In elevated mode: show only urgent reminders first
+  // Task Actions
+  async function handleSetTaskStatus(taskId, status) {
+    setTaskActionLoading(true);
+    setTaskActionError("");
+    try {
+      await setTaskStatus({ taskId, status });
+      await reloadPatientTasks?.();
+    } catch (err) {
+      setTaskActionError(err.message || "Failed to update task status.");
+    } finally {
+      setTaskActionLoading(false);
+    }
+  }
+
+  async function handleCreateTask(e) {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    setTaskActionLoading(true);
+    setTaskActionError("");
+    try {
+      await assignTask({
+        patientId: currentPatient.id,
+        title: newTaskTitle,
+        description: newTaskDesc,
+        category: newTaskCategory,
+        priority: newTaskPriority,
+        dueAt: newTaskDue ? new Date(newTaskDue).toISOString() : null,
+        assignedTo: newTaskAssignee || null,
+        isEssential: newTaskEssential,
+      });
+      setShowAssignModal(false);
+      setNewTaskTitle("");
+      setNewTaskDesc("");
+      setNewTaskDue("");
+      await reloadPatientTasks?.();
+    } catch (err) {
+      setTaskActionError(err.message || "Failed to assign task.");
+    } finally {
+      setTaskActionLoading(false);
+    }
+  }
+
+  async function handleReassignSubmit(e) {
+    e.preventDefault();
+    if (!reassigningTask || !reassignTargetCaregiver) return;
+    setTaskActionLoading(true);
+    setTaskActionError("");
+    try {
+      await reassignTask({
+        taskId: reassigningTask.task_id,
+        newAssigneeId: reassignTargetCaregiver,
+      });
+      setReassigningTask(null);
+      setReassignTargetCaregiver("");
+      await reloadPatientTasks?.();
+    } catch (err) {
+      setTaskActionError(err.message || "Failed to reassign task.");
+    } finally {
+      setTaskActionLoading(false);
+    }
+  }
+
   const priorityReminders = isElevated
     ? todaysReminders.filter((r) => r.status === "missed" || r.status === "upcoming").slice(0, 4)
     : todaysReminders;
+
+  const displayedTasks = taskTab === "my" ? myTasks : patientTasks;
+  const overdueCount = displayedTasks.filter(isTaskOverdue).length;
+
+  // Rule-based Action Engine suggestions
+  const suggestedActions = [
+    {
+      id: "action-rebalance",
+      title: "Workload Task Rebalancing",
+      description: "Evening care and medication tasks can be shared across family caregivers to alleviate elevated strain.",
+      category: "Workload Balance",
+      severity: liveStats.factors.taskImbalance > 30 ? "high" : "normal",
+    },
+    {
+      id: "action-sleep",
+      title: "Sleep Log Record Request",
+      description: "Night rest data assists the coordination model in monitoring recovery and fatigue levels.",
+      category: "Wellbeing Monitoring",
+      severity: liveStats.factors.sleepDisruption > 40 ? "high" : "normal",
+    },
+    {
+      id: "action-routine",
+      title: "Medication Window Adherence",
+      description: "Ensure morning and evening doses are logged within the allowable 30-minute grace window.",
+      category: "Adherence Assurance",
+      severity: liveStats.factors.missedOverdue > 20 ? "high" : "normal",
+    },
+  ];
 
   return (
     <div className="wt-dashboard">
@@ -162,20 +359,20 @@ function Dashboard() {
       {/* ---------- Patient strip ---------- */}
       <div className="wt-patient-strip">
         <div className="wt-patient-strip__identity">
-          <div className="wt-patient-avatar">{initialFor(currentPatient.name)}</div>
+          <div className="wt-patient-avatar">{initialFor(currentPatient?.name || "P")}</div>
           <div>
             <p className="wt-eyebrow">Patient</p>
-            <h2>{currentPatient.name}</h2>
+            <h2>{currentPatient?.name || "No Patient Selected"}</h2>
             <p className="wt-patient-strip__meta">
-              {currentPatient.age} years · {currentPatient.condition}
+              {currentPatient?.age ? `${currentPatient.age} years · ` : ""}{currentPatient?.condition || "No details"}
             </p>
             <span
               className={`wt-status wt-status--${
-                currentPatient.status === "Attention" ? "attention" : "stable"
+                currentPatient?.status === "Attention" ? "attention" : "stable"
               }`}
             >
               <span className="wt-status__dot" />
-              {currentPatient.careCircleActive ? "Care circle active" : "No active caregivers"}
+              {currentPatient?.careCircleActive ? "Care circle active" : "No active circle"}
             </span>
           </div>
         </div>
@@ -196,7 +393,7 @@ function Dashboard() {
 
         <div className="wt-patient-strip__activity">
           <p className="wt-eyebrow">Last activity</p>
-          <p className="wt-patient-strip__value">{currentPatient.lastActivity}</p>
+          <p className="wt-patient-strip__value">{currentPatient?.lastActivity || "None yet"}</p>
           <Link to="/patient" className="wt-link">
             View profile <ArrowRight size={14} />
           </Link>
@@ -236,11 +433,18 @@ function Dashboard() {
                   strokeLinejoin="round"
                 />
               </svg>
-              <p className="wt-card__label wt-capitalize">{riskLevel} risk</p>
+              <p className="wt-card__label wt-capitalize">{riskLevel || "active"} risk · Strain Index: {strainIndex != null ? `${strainIndex}/100` : "N/A"}</p>
               {!isElevated && <p className="wt-card__note">{recommendation}</p>}
             </>
           ) : (
-            <p className="wt-card__label">No coordination score yet today.</p>
+            <div style={{ padding: "8px 0" }}>
+              <p className="wt-card__big" style={{ fontSize: 24, color: "var(--text-faint)" }}>
+                No score yet
+              </p>
+              <p className="wt-card__label" style={{ marginTop: 4 }}>
+                Click below to compute a live prediction with the trained model.
+              </p>
+            </div>
           )}
           <button
             type="button"
@@ -251,10 +455,296 @@ function Dashboard() {
             <RefreshCw size={15} className={isRecalculating ? "wt-spin" : ""} />
             {isRecalculating ? "Recalculating…" : "Recalculate Score"}
           </button>
-          {recalculateError && <p className="wt-card__note" role="alert">{recalculateError}</p>}
-          {recalculateNotice && <p className="wt-card__note" role="status">{recalculateNotice}</p>}
+          {recalculateError && <p className="wt-card__note" role="alert" style={{ color: "var(--danger)" }}>{recalculateError}</p>}
+          {recalculateNotice && <p className="wt-card__note" role="status" style={{ color: "var(--success)" }}>{recalculateNotice}</p>}
         </div>
       </div>
+
+      {/* ---------- Action Path & Contributing Factors ---------- */}
+      <section className="wt-panel" style={{ padding: "var(--space-5)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-4)", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <p className="wt-eyebrow">Care Action Path</p>
+            <h3 style={{ margin: 0 }}>Strain Index & Action Engine</h3>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span className={`wt-pill wt-pill--${riskLevel === "low" ? "success" : riskLevel === "elevated" ? "danger" : "neutral"}`}>
+              Strain: {strainIndex} / 100 ({riskLevel})
+            </span>
+            <span className="wt-pill wt-pill--neutral">Rolling 7-day window</span>
+          </div>
+        </div>
+
+        {/* Factors Breakdown */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: "var(--space-5)" }}>
+          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Missed / Overdue (25%)</span>
+            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, color: liveStats.factors.missedOverdue > 25 ? "var(--danger)" : "var(--text-primary)" }}>
+              {liveStats.factors.missedOverdue}%
+            </p>
+          </div>
+          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Workload Volume (20%)</span>
+            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700 }}>{liveStats.factors.workload}%</p>
+          </div>
+          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Night Interruptions (15%)</span>
+            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, color: liveStats.factors.nightInterruptions > 30 ? "var(--warning)" : "var(--text-primary)" }}>
+              {liveStats.factors.nightInterruptions}%
+            </p>
+          </div>
+          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Sleep Disruption (15%)</span>
+            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700 }}>
+              {typeof liveStats.factors.sleepDisruption === "number" ? `${liveStats.factors.sleepDisruption}%` : liveStats.factors.sleepDisruption}
+            </p>
+          </div>
+          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Task Imbalance (15%)</span>
+            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700 }}>{liveStats.factors.taskImbalance}%</p>
+          </div>
+          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Late Logging (10%)</span>
+            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700 }}>{liveStats.factors.lateLogging}%</p>
+          </div>
+        </div>
+
+        {/* Suggested Actions with Accept/Decline */}
+        <div>
+          <p className="wt-eyebrow" style={{ marginBottom: 8 }}>Suggested Actions (Accept / Decline)</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {suggestedActions.map((act) => {
+              const decision = actionDecisions[act.id];
+              return (
+                <div
+                  key={act.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "12px 16px",
+                    background: "var(--surface)",
+                    border: "1px solid var(--border-strong)",
+                    borderRadius: "var(--radius-md)",
+                    flexWrap: "wrap",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 260 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14 }}>{act.title}</span>
+                      <span className="wt-pill wt-pill--neutral" style={{ fontSize: 10 }}>{act.category}</span>
+                      {act.severity === "high" && <span className="wt-pill wt-pill--danger" style={{ fontSize: 10 }}>Priority</span>}
+                    </div>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>{act.description}</p>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {decision ? (
+                      <span className={`wt-pill wt-pill--${decision === "accepted" ? "success" : "neutral"}`}>
+                        {decision === "accepted" ? "✓ Accepted" : "Declined"}
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="wt-btn wt-btn--primary"
+                          style={{ padding: "6px 14px", fontSize: 12 }}
+                          onClick={() => handleDecision(act.id, "accepted")}
+                        >
+                          <Check size={13} /> Accept
+                        </button>
+                        <button
+                          type="button"
+                          className="wt-btn wt-btn--ghost"
+                          style={{ padding: "6px 14px", fontSize: 12 }}
+                          onClick={() => handleDecision(act.id, "declined")}
+                        >
+                          <X size={13} /> Decline
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- Tasks Management Section ---------- */}
+      <section className="wt-panel" style={{ padding: "var(--space-5)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-4)", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <p className="wt-eyebrow">Care Tasks</p>
+            <h3 style={{ margin: 0 }}>
+              {taskTab === "my" ? "My Assigned Tasks" : "Shared Circle Tasks"} ({displayedTasks.length})
+            </h3>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", background: "var(--background)", borderRadius: "var(--radius-full)", padding: 3, border: "1px solid var(--border)" }}>
+              <button
+                type="button"
+                className={`wt-btn ${taskTab === "my" ? "wt-btn--primary" : "wt-btn--ghost"}`}
+                style={{ padding: "6px 14px", fontSize: 12, border: "none" }}
+                onClick={() => setTaskTab("my")}
+              >
+                My Tasks ({myTasks.length})
+              </button>
+              <button
+                type="button"
+                className={`wt-btn ${taskTab === "all" ? "wt-btn--primary" : "wt-btn--ghost"}`}
+                style={{ padding: "6px 14px", fontSize: 12, border: "none" }}
+                onClick={() => setTaskTab("all")}
+              >
+                Shared Circle ({patientTasks.length})
+              </button>
+            </div>
+
+            {isPrimaryCaregiver && (
+              <button
+                type="button"
+                className="wt-btn wt-btn--primary"
+                style={{ padding: "8px 16px", fontSize: 13 }}
+                onClick={() => setShowAssignModal(true)}
+              >
+                <Plus size={15} /> Assign Task
+              </button>
+            )}
+          </div>
+        </div>
+
+        {taskActionError && (
+          <div className="wt-form-error" role="alert" style={{ marginBottom: 16 }}>
+            {taskActionError}
+          </div>
+        )}
+
+        {overdueCount > 0 && (
+          <div style={{ padding: "8px 14px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius-sm)", marginBottom: 14, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+            <AlertTriangle size={15} />
+            <span><strong>{overdueCount} task{overdueCount !== 1 ? "s" : ""} overdue</strong> — requires prompt attention.</span>
+          </div>
+        )}
+
+        {displayedTasks.length === 0 ? (
+          <p className="wt-empty">
+            {taskTab === "my" ? "You have no tasks assigned right now." : "No care tasks logged for this circle."}
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {displayedTasks.map((t) => {
+              const overdue = isTaskOverdue(t);
+              const isMine = t.assigned_to === caregiverProfile?.caregiver_id;
+              const assigneeName = t.assignee?.full_name || "Unassigned";
+
+              return (
+                <div
+                  key={t.task_id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "14px 18px",
+                    background: "var(--surface)",
+                    borderRadius: "var(--radius-md)",
+                    border: overdue ? "1.5px solid var(--danger)" : "1px solid var(--border)",
+                    boxShadow: "var(--shadow-sm)",
+                    flexWrap: "wrap",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 260 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 700, fontSize: 15 }}>{t.title}</span>
+                      <span className="wt-pill wt-pill--neutral" style={{ fontSize: 10, textTransform: "capitalize" }}>
+                        {t.category || "General"}
+                      </span>
+                      {t.priority === "high" && (
+                        <span className="wt-pill wt-pill--danger" style={{ fontSize: 10 }}>High</span>
+                      )}
+                      {t.is_essential && (
+                        <span className="wt-pill wt-pill--success" style={{ fontSize: 10 }}>Essential</span>
+                      )}
+                      {overdue && (
+                        <span className="wt-pill wt-pill--danger" style={{ fontSize: 10 }}>Overdue</span>
+                      )}
+                    </div>
+
+                    {t.description && (
+                      <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 6px" }}>
+                        {t.description}
+                      </p>
+                    )}
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--text-faint)" }}>
+                      <span>Assigned to: <strong>{assigneeName}</strong></span>
+                      {t.due_at && (
+                        <span>Due: {new Date(t.due_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {/* Status Display */}
+                    <span
+                      className={`wt-pill wt-pill--${
+                        t.status === "completed" ? "success" : t.status === "in_progress" ? "warning" : "neutral"
+                      }`}
+                      style={{ textTransform: "capitalize" }}
+                    >
+                      {t.status === "in_progress" ? "In Progress" : t.status}
+                    </span>
+
+                    {/* Member action buttons on My Tasks */}
+                    {isMine && t.status !== "completed" && (
+                      <>
+                        {t.status === "pending" && (
+                          <button
+                            type="button"
+                            className="wt-btn wt-btn--ghost"
+                            style={{ padding: "6px 12px", fontSize: 12 }}
+                            onClick={() => handleSetTaskStatus(t.task_id, "in_progress")}
+                            disabled={taskActionLoading}
+                          >
+                            <Play size={12} /> Start
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="wt-btn wt-btn--primary"
+                          style={{ padding: "6px 12px", fontSize: 12 }}
+                          onClick={() => handleSetTaskStatus(t.task_id, "completed")}
+                          disabled={taskActionLoading}
+                        >
+                          <Check size={12} /> Complete
+                        </button>
+                      </>
+                    )}
+
+                    {/* Primary Caregiver Reassign Button */}
+                    {isPrimaryCaregiver && t.status !== "completed" && (
+                      <button
+                        type="button"
+                        className="wt-btn wt-btn--ghost"
+                        style={{ padding: "6px 12px", fontSize: 12 }}
+                        onClick={() => {
+                          setReassigningTask(t);
+                          setReassignTargetCaregiver(t.assigned_to || "");
+                        }}
+                        disabled={taskActionLoading}
+                      >
+                        <UserCheck size={12} /> Reassign
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* ---------- Recent activity + today's reminders ---------- */}
       <div className="wt-two-col">
@@ -338,6 +828,184 @@ function Dashboard() {
           )}
         </section>
       </div>
+
+      {/* ---------- Modal: Assign New Task ---------- */}
+      {showAssignModal && (
+        <div className="wt-modal-overlay">
+          <div className="wt-modal">
+            <div className="wt-modal-header">
+              <h2>Assign Care Task</h2>
+              <button
+                type="button"
+                className="wt-modal-close"
+                onClick={() => setShowAssignModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTask}>
+              <div className="wt-form-grid">
+                <div className="wt-form-group wt-form-group--full">
+                  <label>Task Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Afternoon Physiotherapy Exercises"
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                  />
+                </div>
+
+                <div className="wt-form-group">
+                  <label>Category</label>
+                  <select
+                    value={newTaskCategory}
+                    onChange={(e) => setNewTaskCategory(e.target.value)}
+                  >
+                    <option value="medication">Medication</option>
+                    <option value="meal">Meal</option>
+                    <option value="activity">Activity</option>
+                    <option value="daily_log">Daily Care</option>
+                    <option value="appointment">Appointment</option>
+                  </select>
+                </div>
+
+                <div className="wt-form-group">
+                  <label>Priority</label>
+                  <select
+                    value={newTaskPriority}
+                    onChange={(e) => setNewTaskPriority(e.target.value)}
+                  >
+                    <option value="high">High</option>
+                    <option value="normal">Normal</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+
+                <div className="wt-form-group">
+                  <label>Assign To (Active Circle Member)</label>
+                  <select
+                    value={newTaskAssignee}
+                    onChange={(e) => setNewTaskAssignee(e.target.value)}
+                  >
+                    <option value="">Leave Unassigned (Shared)</option>
+                    {careCircle.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.role || "Member"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="wt-form-group">
+                  <label>Due Time</label>
+                  <input
+                    type="datetime-local"
+                    value={newTaskDue}
+                    onChange={(e) => setNewTaskDue(e.target.value)}
+                  />
+                </div>
+
+                <div className="wt-form-group wt-form-group--full">
+                  <label>Description / Care Instructions</label>
+                  <textarea
+                    placeholder="Specific instructions or reminders for the assigned caregiver..."
+                    value={newTaskDesc}
+                    onChange={(e) => setNewTaskDesc(e.target.value)}
+                  />
+                </div>
+
+                <div className="wt-form-group wt-form-group--full" style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    id="newTaskEssential"
+                    checked={newTaskEssential}
+                    onChange={(e) => setNewTaskEssential(e.target.checked)}
+                  />
+                  <label htmlFor="newTaskEssential" style={{ cursor: "pointer", margin: 0 }}>
+                    Essential care task (requires primary caregiver approval before reassigning)
+                  </label>
+                </div>
+              </div>
+
+              <div className="wt-modal-actions">
+                <button
+                  type="button"
+                  className="wt-btn wt-btn--ghost"
+                  onClick={() => setShowAssignModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="wt-btn wt-btn--primary"
+                  disabled={taskActionLoading || !newTaskTitle.trim()}
+                >
+                  {taskActionLoading ? "Assigning…" : "Create & Assign Task"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Modal: Reassign Task ---------- */}
+      {reassigningTask && (
+        <div className="wt-modal-overlay">
+          <div className="wt-modal wt-modal--narrow">
+            <div className="wt-modal-header">
+              <h2>Reassign Task</h2>
+              <button
+                type="button"
+                className="wt-modal-close"
+                onClick={() => setReassigningTask(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleReassignSubmit}>
+              <p style={{ fontSize: 14, margin: "0 0 16px" }}>
+                Reassign <strong>"{reassigningTask.title}"</strong> to an active care circle member:
+              </p>
+
+              <div className="wt-form-group" style={{ marginBottom: 20 }}>
+                <label>Select Assignee</label>
+                <select
+                  required
+                  value={reassignTargetCaregiver}
+                  onChange={(e) => setReassignTargetCaregiver(e.target.value)}
+                >
+                  <option value="">Select a caregiver...</option>
+                  {careCircle.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.role || "Member"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="wt-modal-actions">
+                <button
+                  type="button"
+                  className="wt-btn wt-btn--ghost"
+                  onClick={() => setReassigningTask(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="wt-btn wt-btn--primary"
+                  disabled={taskActionLoading || !reassignTargetCaregiver}
+                >
+                  {taskActionLoading ? "Reassigning…" : "Confirm Reassignment"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

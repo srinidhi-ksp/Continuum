@@ -1,58 +1,29 @@
-/**
- * AI Assistant API layer.
- *
- * Request flow:
- *   Frontend  →  POST {VITE_BACKEND_URL}/ai/chat  →  FastAPI  →  Gemini
- *
- * The VITE_BACKEND_URL env var must point at the running FastAPI server
- * (default: http://localhost:8000). If the backend is unreachable the
- * function throws with a descriptive message so the UI can show it.
- */
+const TIMEOUT_MS = 20000;
+const OUT_OF_SCOPE = /\b(president|prime minister|capital of|weather|sports|score|poem|homework|movie|actor|actress|crypto|bitcoin|stock price|election|celebrity|recipe|tell me a joke|who is the president)\b/i;
+const MEDICAL_DECISION = /\b(recommend.*(medication|medicine|drug|treatment|dose|pill)|which medicine|what medicine|change.*(dosage|dose|medicine)|increase.*dose|decrease.*dose|stop.*(medication|medicine)|prescribe|what dose|what pill|should (i|we) give|can (i|we) give|give (her|him|them).*pill|dosage of|mg of)\b/i;
 
-const TIMEOUT_MS = 30_000; // 30-second timeout for AI responses
-
-export async function askCaregiverAssistant({ message, patientContext, language }) {
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-
-  const payload = {
-    message,
-    context: patientContext || {},
-    language: language || "en",
-  };
-
+export async function askCaregiverAssistant({ message, patientContext = {}, language = "en", accessToken }) {
+  const text = String(message || "").trim();
+  if (!text) throw new Error("Enter a question about care coordination.");
+  if (OUT_OF_SCOPE.test(text)) return "I can help with patient care coordination and safe caregiving only, not general-knowledge or out-of-scope questions.";
+  if (MEDICAL_DECISION.test(text)) return "I cannot recommend, prescribe, start, stop, or change medication or dosage. Please contact the patient’s prescribing physician or pharmacist for all medication guidance. If this may be urgent, seek local emergency medical care immediately.";
+  const backend = (import.meta.env.VITE_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
   try {
-    const res = await fetch(`${BACKEND_URL}/ai/chat`, {
+    const response = await fetch(`${backend.replace(/\/$/, "")}/ai/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+      body: JSON.stringify({ message: text, context: patientContext, language }),
       signal: controller.signal,
     });
-
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      throw new Error(
-        `Backend returned ${res.status}: ${detail || res.statusText}`
-      );
-    }
-
-    const data = await res.json();
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || data.message || `AI service returned ${response.status}.`);
+    if (typeof data.response !== "string" || !data.response.trim()) throw new Error("AI service returned an empty response. Please retry.");
     return data.response;
   } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error("The AI assistant took too long to respond. Please try again.", { cause: error });
-    }
-    if (error.message?.includes("Failed to fetch") || error.message?.includes("NetworkError")) {
-      throw new Error(
-        `Cannot reach the backend server at ${BACKEND_URL}. ` +
-        "Make sure the FastAPI server is running (uvicorn main:app --reload).",
-        { cause: error }
-      );
-    }
+    if (error.name === "AbortError") throw new Error("AI request timed out. Please retry.", { cause: error });
+    if (error.message?.includes("Failed to fetch")) throw new Error("Cannot reach the AI backend. Check that the backend is running and configured.", { cause: error });
     throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  } finally { clearTimeout(timer); }
 }

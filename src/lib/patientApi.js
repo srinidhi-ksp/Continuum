@@ -20,50 +20,82 @@ function patientPayloadFromForm(form) {
 }
 
 // Creates the patient, links them to the current caregiver as "primary",
-// and adds their emergency contact if one was entered. The caregiverId
-// is resolved at call-time via getCaregiverId() so it always uses the
-// authenticated user's UUID — not the hardcoded module-level constant.
+// and adds their emergency contact if one was entered. It first attempts
+// the atomic SECURITY DEFINER RPC create_patient, avoiding RLS race conditions.
+// If the RPC is not available, it securely falls back to direct table inserts.
 export async function createPatient(form) {
   const caregiverId = form.caregiverId || getCaregiverId();
   if (!caregiverId) throw new Error("No authenticated caregiver ID available.");
 
-  const { data: patientRow, error: patientError } = await supabase
-    .from("patient")
-    .insert(patientPayloadFromForm(form))
-    .select()
-    .single();
-  if (patientError) throw patientError;
+  let patientRow = null;
 
-  // Build the link payload with only the guaranteed base columns.
-  // The extended columns (relationship, status) are added by migration_v2.sql;
-  // if that migration hasn't been applied yet, we skip them gracefully.
-  const baseLinkPayload = {
-    caregiver_id: caregiverId,
-    patient_id: patientRow.patient_id,
-    role: "primary",
-    joining_at: new Date().toISOString(),
-  };
+  // 1. Try atomic create_patient RPC (creates patient & caregiver_pat in single transaction)
+  try {
+    if (typeof supabase?.rpc === "function") {
+      const { data: rpcData, error: rpcError } = await supabase.rpc("create_patient", {
+      p_full_name: form.name?.trim(),
+      p_dob: form.dob || null,
+      p_gender: form.gender || null,
+      p_condition_type: form.condition || null,
+      p_time_zone: "Asia/Kolkata",
+      p_blood_group: form.bloodGroup || null,
+      p_allergies: form.allergies || null,
+      p_medical_notes: form.notes || null,
+      p_relationship: form.relationship || "Primary caregiver",
+    });
 
-  // Try with extended columns first; fall back to base-only if schema not migrated
-  let linkError;
-  ({ error: linkError } = await supabase.from("caregiver_pat").insert({
-    ...baseLinkPayload,
-    relationship: form.relationship || null,
-    status: "active",
-  }));
-
-  if (linkError) {
-    // If extended columns don't exist yet, retry with base columns only
-    const isColumnMissing = linkError.message?.includes("column") || linkError.message?.includes("schema");
-    if (isColumnMissing) {
-      console.warn("[patientApi] Extended columns not yet migrated — inserting base link only");
-      ({ error: linkError } = await supabase.from("caregiver_pat").insert(baseLinkPayload));
+    if (!rpcError && rpcData) {
+      if (typeof rpcData === "string") {
+        const { data: fetched, error: fetchErr } = await supabase
+          .from("patient")
+          .select("*")
+          .eq("patient_id", rpcData)
+          .single();
+        if (!fetchErr && fetched) {
+          patientRow = fetched;
+        } else {
+          patientRow = { patient_id: rpcData, ...patientPayloadFromForm(form), created_by: caregiverId };
+        }
+      } else {
+        patientRow = rpcData;
+      }
     }
-    if (linkError) throw linkError;
+  }
+} catch (rpcEx) {
+    console.warn("[patientApi] create_patient RPC failed, attempting direct insert:", rpcEx);
+  }
+
+  // 2. Direct table insert fallback if RPC was not used
+  if (!patientRow) {
+    const { data: directPatient, error: patientError } = await supabase
+      .from("patient")
+      .insert({ ...patientPayloadFromForm(form), created_by: caregiverId })
+      .select()
+      .single();
+    if (patientError) throw patientError;
+    patientRow = directPatient;
+
+    const { error: linkError } = await supabase.from("caregiver_pat").insert({
+      caregiver_id: caregiverId,
+      patient_id: patientRow.patient_id,
+      role: "primary",
+      status: "active",
+      relationship: form.relationship || "Primary caregiver",
+      assigned_responsibilities: ["All care responsibilities"],
+    });
+
+    if (linkError) {
+      await supabase.from("patient").delete().eq("patient_id", patientRow.patient_id);
+      throw linkError;
+    }
   }
 
   if (form.emergencyContact) {
-    await upsertEmergencyContact(patientRow.patient_id, form);
+    try {
+      await upsertEmergencyContact(patientRow.patient_id, form);
+    } catch (contactErr) {
+      console.warn("[patientApi] Emergency contact save warning:", contactErr);
+    }
   }
 
   return patientRow;

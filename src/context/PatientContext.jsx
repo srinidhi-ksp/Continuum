@@ -4,19 +4,22 @@ import { mapPatientRow } from "../lib/mappers";
 import { fetchCareCircleMembers } from "../lib/careCircleApi";
 import { fetchMedications } from "../lib/medicationApi";
 import { fetchDailyCareLogs } from "../lib/dailyCareApi";
+import { fetchPatientTasks } from "../lib/taskApi";
 import { useAuth } from "./AuthContext";
 
 const PatientContext = createContext(null);
 
 export function PatientProvider({ children }) {
-  const { user } = useAuth();
+  const { caregiverProfile, setNeedsOnboarding } = useAuth();
   const [patients, setPatients] = useState([]);
   const [currentPatientId, setCurrentPatientId] = useState(null);
 
   const [careCircle, setCareCircle] = useState([]);
   const [medicationsByPatient, setMedicationsByPatient] = useState({});
+  const [appointmentsByPatient, setAppointmentsByPatient] = useState({});
   const [logsByPatient, setLogsByPatient] = useState({});
   const [remindersByPatient, setRemindersByPatient] = useState({});
+  const [tasksByPatient, setTasksByPatient] = useState({});
   const [coordinationMetric, setCoordinationMetric] = useState(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -25,10 +28,8 @@ export function PatientProvider({ children }) {
 
   // ── Every patient linked to the authenticated caregiver ─────────────
   const loadPatients = useCallback(async () => {
-    const activeCaregiverId = user?.id;
+    const activeCaregiverId = caregiverProfile?.caregiver_id;
 
-    // Don't attempt to load if no real caregiver is authenticated
-    // (the default hardcoded ID starts with "11111111" for dev/testing only)
     if (!activeCaregiverId) {
       setPatients([]);
       setCurrentPatientId(null);
@@ -43,12 +44,22 @@ export function PatientProvider({ children }) {
         .from("caregiver_pat")
         .select("patient_id")
         .eq("caregiver_id", activeCaregiverId)
-        .is("removed_at", null);
+        .eq("status", "active");
 
-      if (linkError) throw linkError;
+      if (linkError) {
+        console.error("[PatientContext] caregiver_pat query error:", linkError.code, linkError.message, linkError.hint);
+        throw new Error(`Membership lookup failed (${linkError.code}): ${linkError.message}`);
+      }
 
       const patientIds = [...new Set((links || []).map((l) => l.patient_id))];
       if (patientIds.length === 0) {
+        // Log diagnostic info so developers can spot RLS misconfiguration
+        console.warn(
+          "[PatientContext] caregiver_pat returned 0 rows for caregiver_id:",
+          activeCaregiverId,
+          "\n→ If patients exist in Supabase, this is likely an RLS policy issue.",
+          "\n→ Run 02_fix_rls_minimal.sql in the Supabase SQL editor, then verify caregiver.auth_user_id is set."
+        );
         setPatients([]);
         setCurrentPatientId(null);
         return;
@@ -61,6 +72,11 @@ export function PatientProvider({ children }) {
 
       if (patientError) throw patientError;
 
+      // Active patients exist in database -> stop setup loop and clear onboarding flag
+      if (patientRows && patientRows.length > 0) {
+        setNeedsOnboarding?.(false);
+      }
+
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
 
@@ -72,7 +88,7 @@ export function PatientProvider({ children }) {
                 .from("caregiver_pat")
                 .select("caregiver_id")
                 .eq("patient_id", row.patient_id)
-                .is("removed_at", null),
+                .eq("status", "active"),
               supabase
                 .from("coordination_metric")
                 .select("*")
@@ -136,7 +152,7 @@ export function PatientProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [caregiverProfile?.caregiver_id, setNeedsOnboarding]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -148,7 +164,7 @@ export function PatientProvider({ children }) {
     if (!patientId) return;
     setIsDetailLoading(true);
     try {
-      const [members, medRowsMapped, logRows, metricRes] = await Promise.all([
+      const results = await Promise.allSettled([
         fetchCareCircleMembers(patientId),
         fetchMedications(patientId),
         fetchDailyCareLogs(patientId, 30),
@@ -158,9 +174,23 @@ export function PatientProvider({ children }) {
           .eq("patient_id", patientId)
           .order("predicted_at", { ascending: false })
           .limit(1),
+        supabase
+          .from("appointment")
+          .select("*")
+          .eq("patient_id", patientId)
+          .order("appointment_date", { ascending: true }),
+        fetchPatientTasks(patientId),
       ]);
 
+      const members = results[0].status === "fulfilled" ? results[0].value : [];
+      const medRowsMapped = results[1].status === "fulfilled" ? results[1].value : [];
+      const logRows = results[2].status === "fulfilled" ? results[2].value : [];
+      const metricRes = results[3].status === "fulfilled" ? results[3].value : { data: null };
+      const apptRows = results[4].status === "fulfilled" ? results[4].value : { data: [] };
+      const taskRows = results[5].status === "fulfilled" ? results[5].value : [];
+
       setCareCircle(members);
+      setTasksByPatient((prev) => ({ ...prev, [patientId]: taskRows || [] }));
 
       setMedicationsByPatient((prev) => ({
         ...prev,
@@ -168,10 +198,20 @@ export function PatientProvider({ children }) {
       }));
 
       setLogsByPatient((prev) => ({ ...prev, [patientId]: logRows }));
+      const mappedAppointments = (apptRows.data || []).map((a) => ({
+        ...a,
+        appointment_time: a.appointment_date,
+        location: a.hospital || "",
+        specialty: "",
+        status: a.appointment_date && new Date(a.appointment_date) >= new Date() ? "upcoming" : "completed",
+      }));
+      setAppointmentsByPatient((prev) => ({ ...prev, [patientId]: mappedAppointments }));
 
       // Build reminders list
       const today = new Date();
       const reminders = [];
+
+      // Add medication reminders
       medRowsMapped
         .filter((m) => m.active)
         .forEach((m) => {
@@ -192,11 +232,30 @@ export function PatientProvider({ children }) {
               time: cleanTime,
               status: taken ? "completed" : "upcoming",
               sortKey: idx,
+              type: "medication",
             });
           });
         });
-      setRemindersByPatient((prev) => ({ ...prev, [patientId]: reminders }));
 
+      // Add upcoming doctor appointment reminders for today/soon
+      (mappedAppointments || [])
+        .filter((a) => new Date(a.appointment_date) >= new Date())
+        .forEach((a) => {
+          const aDate = new Date(a.appointment_date);
+          const timeFormatted = aDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+          const isToday = aDate.toDateString() === today.toDateString();
+          reminders.push({
+            id: `appt-${a.appointment_id}`,
+            title: `Doctor: ${a.doctor_name}`,
+            subtitle: `Appointment · ${a.hospital || ""}`,
+            time: isToday ? timeFormatted : `${aDate.toLocaleDateString("en-IN", { month: "short", day: "numeric" })} ${timeFormatted}`,
+            status: "upcoming",
+            sortKey: 99,
+            type: "appointment",
+          });
+        });
+
+      setRemindersByPatient((prev) => ({ ...prev, [patientId]: reminders }));
       setCoordinationMetric(metricRes.data?.[0] || null);
     } catch (err) {
       console.error("[PatientContext] Failed to load patient detail:", err);
@@ -213,7 +272,10 @@ export function PatientProvider({ children }) {
   const currentPatient = patients.find((p) => p.id === currentPatientId) ?? patients[0] ?? null;
   const currentMedications = medicationsByPatient[currentPatientId] ?? [];
   const currentLogs = logsByPatient[currentPatientId] ?? [];
+  const currentAppointments = appointmentsByPatient[currentPatientId] ?? [];
   const todaysReminders = remindersByPatient[currentPatientId] ?? [];
+  const patientTasks = tasksByPatient[currentPatientId] ?? [];
+  const myTasks = patientTasks.filter((t) => t.assigned_to === caregiverProfile?.caregiver_id);
 
   const setCurrentMedications = (medsOrFn) =>
     setMedicationsByPatient((prev) => ({
@@ -239,7 +301,10 @@ export function PatientProvider({ children }) {
         setCurrentMedications,
         currentLogs,
         setCurrentLogs,
+        currentAppointments,
         todaysReminders,
+        patientTasks,
+        myTasks,
         careCircle,
         coordinationMetric,
         isLoading,
@@ -247,6 +312,12 @@ export function PatientProvider({ children }) {
         loadError,
         reloadPatients: loadPatients,
         reloadPatientDetail: () => currentPatientId && loadPatientDetail(currentPatientId),
+        reloadPatientTasks: async () => {
+          if (currentPatientId) {
+            const tasks = await fetchPatientTasks(currentPatientId);
+            setTasksByPatient((prev) => ({ ...prev, [currentPatientId]: tasks }));
+          }
+        },
       }}
     >
       {children}

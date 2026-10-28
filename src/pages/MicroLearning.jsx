@@ -27,8 +27,8 @@ const CATEGORY_LABELS = {
 };
 
 export default function MicroLearning() {
-  const { user } = useAuth();
-  const caregiverId = user?.id;
+  const { caregiverProfile } = useAuth();
+  const caregiverId = caregiverProfile?.caregiver_id;
   const { patients } = usePatient();
 
   const [scenarios, setScenarios] = useState([]);

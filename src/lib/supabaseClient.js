@@ -2,34 +2,42 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+export const isLocalMode = false;
+export const hasSupabaseConfig = Boolean(
+  supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith("https://") &&
+  !supabaseUrl.includes("your-project-ref") && !supabaseAnonKey.includes("your-anon-public-key")
+);
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    "[supabaseClient] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. " +
-      "Copy .env.example to .env and fill in your project's values."
-  );
-}
+// Never fall back to seeded localStorage/demo data. Misconfiguration is surfaced to the UI.
+// Using sessionStorage ensures each tab has its own independent session, allowing multiple
+// distinct user logins in different tabs without cross-tab token overwrites.
+export const supabase = createClient(
+  hasSupabaseConfig ? supabaseUrl : "https://missing-config.supabase.co",
+  hasSupabaseConfig ? supabaseAnonKey : "missing-public-anon-key",
+  {
+    auth: {
+      storage: typeof window !== "undefined" ? window.sessionStorage : undefined,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  }
+);
 
-export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "");
-
-// ── Caregiver ID Management ─────────────────────────────────────────────
-// The canonical source of truth is the Supabase Auth session (user.id).
-// These helpers exist so that API-layer files (dailyCareApi, medicationApi,
-// etc.) that need a caregiver_id for write operations can obtain one
-// without importing React context.
-
-let _caregiverId = null;
-
-export function setCurrentCaregiverId(id) {
-  _caregiverId = id || null;
-}
-
-export function getCaregiverId() {
-  return _caregiverId;
-}
-
+let currentCaregiverId = null;
+export function setCurrentCaregiverId(id) { currentCaregiverId = id || null; }
+export function getCaregiverId() { return currentCaregiverId; }
 export async function getActiveCaregiverId() {
-  if (_caregiverId) return _caregiverId;
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user?.id || null;
+  if (currentCaregiverId) return currentCaregiverId;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.id) return null;
+  const { data, error } = await supabase
+    .from("caregiver")
+    .select("caregiver_id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (error) throw error;
+  currentCaregiverId = data?.caregiver_id || null;
+  return currentCaregiverId;
 }
+

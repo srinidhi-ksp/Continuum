@@ -11,7 +11,7 @@ export default function AcceptInvite() {
   const token = searchParams.get("token");
   const navigate = useNavigate();
 
-  const { user, isAuthenticated } = useAuth();
+  const { caregiverProfile, isAuthenticated } = useAuth();
   const { reloadPatients, setCurrentPatientId } = usePatient();
 
   const [invite, setInvite] = useState(null);
@@ -50,7 +50,7 @@ export default function AcceptInvite() {
   }, [loadInvite]);
 
   const handleAccept = async () => {
-    if (!isAuthenticated || !user?.id) {
+    if (!isAuthenticated || !caregiverProfile?.caregiver_id) {
       setShowAuthModal(true);
       return;
     }
@@ -58,7 +58,7 @@ export default function AcceptInvite() {
     setIsSubmitting(true);
     setError("");
     try {
-      const res = await acceptInvitation(token, user.id);
+      const res = await acceptInvitation(token, caregiverProfile.caregiver_id, invite?.relationship);
       setAccepted(true);
       await reloadPatients();
       if (res.patientId) setCurrentPatientId(res.patientId);
@@ -177,19 +177,48 @@ export default function AcceptInvite() {
                 <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>
                   Invited by: <strong>{invite?.inviter?.full_name || "Primary Caregiver"}</strong>
                 </p>
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e2e8f0", fontSize: 13, color: "#334155" }}>
-                  Role: <strong className="wt-capitalize">{invite?.role || "Family Caregiver"}</strong> · Relationship: <strong>{invite?.relationship || "Family Member"}</strong>
-                </div>
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e2e8f0", fontSize: 13, color: "#334155" }}>
+                Role: <strong className="wt-capitalize">{invite?.role || "Family Caregiver"}</strong>
               </div>
+            </div>
+
+              {isAuthenticated && (
+                <div style={{ marginTop: 14 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 5 }}>
+                    Your Relationship to {invite?.patient?.full_name || "Patient"}
+                  </label>
+                  <input
+                    type="text"
+                    value={invite?.relationship || "Family Member"}
+                    onChange={(e) => setInvite(prev => ({ ...prev, relationship: e.target.value }))}
+                    placeholder="e.g. Granddaughter, Son, Nurse"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #cbd5e1",
+                      fontSize: 14,
+                      boxSizing: "border-box",
+                      marginBottom: 16,
+                    }}
+                  />
+                </div>
+              )}
 
               {!isAuthenticated && (
                 <div style={{ background: "#fffbe6", border: "1px solid #ffe58f", padding: "12px 14px", borderRadius: 10, fontSize: 13, color: "#d48806", marginBottom: 20 }}>
-                  Please log in or register to accept this invitation and join the care circle.
+                  Please log in or register your caregiver account to accept this invitation and join the care circle.
                 </div>
               )}
 
               <button
-                onClick={handleAccept}
+                onClick={() => {
+                  if (!isAuthenticated) {
+                    navigate(`/login?tab=register&token=${encodeURIComponent(token)}`);
+                  } else {
+                    handleAccept();
+                  }
+                }}
                 disabled={isSubmitting}
                 style={{
                   width: "100%",

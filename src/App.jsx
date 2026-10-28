@@ -1,3 +1,4 @@
+import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard";
@@ -17,6 +18,82 @@ import MainLayout from "./components/MainLayout";
 import { AuthProvider } from "./context/AuthContext";
 import { PatientProvider } from "./context/PatientContext";
 import { useAuth } from "./context/AuthContext";
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("[ErrorBoundary caught an error]", error, errorInfo);
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+    window.location.href = "/";
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#f8fafc",
+            padding: 24,
+            fontFamily: "Inter, Arial, sans-serif",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 480,
+              width: "100%",
+              background: "white",
+              borderRadius: 18,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
+              padding: 32,
+              textAlign: "center",
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <h2 style={{ fontSize: 20, color: "#0f172a", margin: "0 0 8px" }}>
+              Care View Recovered
+            </h2>
+            <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 20px", lineHeight: 1.5 }}>
+              {this.state.error?.message || "An unexpected error occurred while loading this view."}
+            </p>
+            <button
+              type="button"
+              onClick={this.handleReset}
+              style={{
+                background: "#5b57d9",
+                color: "white",
+                border: "none",
+                borderRadius: 10,
+                padding: "10px 20px",
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: "pointer",
+              }}
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function RequireAuth({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -56,13 +133,15 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <PatientProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </PatientProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <PatientProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </PatientProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

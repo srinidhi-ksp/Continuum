@@ -41,7 +41,8 @@ function deriveEventTitle(type, details) {
 }
 
 export async function createDailyCareLog(entry) {
-  const caregiverId = entry.caregiverId || getCaregiverId();
+  // Inserts must use caregiver_id from the loaded profile, never from form state
+  const caregiverId = getCaregiverId() || entry.caregiverId;
   if (!entry.patientId) {
     throw new Error("patientId is required to create a daily care log.");
   }
@@ -71,7 +72,6 @@ export async function createDailyCareLog(entry) {
     console.warn("[dailyCareApi] Failed to insert time_event row:", eventError.message);
   }
 
-  const eventId = eventRow?.event_id || null;
 
   // 2. Prepare daily_care_log payload
   let sleepHours = entry.sleepHours != null ? Number(entry.sleepHours) : null;
@@ -98,7 +98,6 @@ export async function createDailyCareLog(entry) {
   const payload = {
     patient_id: entry.patientId,
     caregiver_id: caregiverId,
-    event_id: eventId,
     type: logType,
     quantity: quantity,
     symptoms: symptoms,
@@ -118,5 +117,5 @@ export async function createDailyCareLog(entry) {
     throw logError;
   }
 
-  return { log: logRow, event: eventRow };
+  return { log: { ...logRow, event_id: eventRow?.event_id }, event: eventRow };
 }

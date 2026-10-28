@@ -158,7 +158,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Srinidhi Ravi"
+                  placeholder="Your full name"
                   style={{
                     width: "100%",
                     padding: "10px 12px",

@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { usePatient } from "../context/PatientContext";
 import { createPatient, updatePatient } from "../lib/patientApi";
+import { createInvitation } from "../lib/invitationApi";
 import { initialFor } from "../lib/caregiverColors";
 import EmergencyContacts from "../components/EmergencyContacts";
 import "../styles/patient.css";
@@ -22,6 +24,7 @@ const EMPTY_FORM = {
 
 function Patient() {
   const { patients, currentPatientId, setCurrentPatientId, reloadPatients } = usePatient();
+  const { caregiverProfile } = useAuth();
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
@@ -39,6 +42,31 @@ function Patient() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [invitePhone, setInvitePhone] = useState("");
   const [inviteSent, setInviteSent] = useState(false);
+  const [generatedInviteUrl, setGeneratedInviteUrl] = useState("");
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+
+  const handleSendInvite = async () => {
+    if (!newlySavedPatient?.id) return;
+    setIsGeneratingInvite(true);
+    setInviteError("");
+    try {
+      const inv = await createInvitation({
+        patientId: newlySavedPatient.id,
+        invitedBy: caregiverProfile?.caregiver_id,
+        email: inviteEmail?.trim() || null,
+        role: "family",
+      });
+      setGeneratedInviteUrl(inv.shareableUrl);
+      setInviteSent(true);
+    } catch (err) {
+      console.error("[Patient] Failed to generate invitation:", err);
+      setInviteError(err.message || "Could not generate invitation link.");
+    } finally {
+      setIsGeneratingInvite(false);
+    }
+  };
 
   const filteredPatients = useMemo(() => {
     return patients.filter(
@@ -515,42 +543,47 @@ function Patient() {
             {inviteSent ? (
               <div style={{ textAlign: "center", padding: "20px 0" }}>
                 <div style={{ fontSize: 36, marginBottom: 10 }}>🎉</div>
-                <h3 style={{ marginBottom: 8 }}>Invite Link Created</h3>
+                <h3 style={{ marginBottom: 8 }}>Secure Invite Link Created</h3>
                 <p style={{ color: "var(--text-secondary)", fontSize: 13, marginBottom: 20 }}>
-                  Share this link with the caregiver to join {newlySavedPatient.name}'s care circle. They'll still
-                  need to be added to the care circle once they sign up — there's no automatic linking yet.
+                  Share this secure single-use invitation link with family or caregivers to join {newlySavedPatient.name}'s care circle.
                 </p>
-                <div className="wt-invite-link">
-                  https://continuum.care/join/{newlySavedPatient.id}
+                <div className="wt-invite-link" style={{ wordBreak: "break-all", fontSize: 12, padding: "10px", background: "#f1f5f9", borderRadius: 8 }}>
+                  {generatedInviteUrl}
                 </div>
                 <button
                   className="wt-btn wt-btn--primary"
-                  style={{ width: "100%" }}
-                  onClick={() =>
-                    navigator.clipboard?.writeText(`https://continuum.care/join/${newlySavedPatient.id}`)
-                  }
+                  style={{ width: "100%", marginTop: 14 }}
+                  onClick={() => {
+                    navigator.clipboard?.writeText(generatedInviteUrl);
+                    setInviteCopied(true);
+                    setTimeout(() => setInviteCopied(false), 2500);
+                  }}
                 >
-                  Copy Care Link
+                  {inviteCopied ? "✓ Link Copied!" : "Copy Invite Link"}
                 </button>
               </div>
             ) : (
               <>
                 <p style={{ color: "var(--text-secondary)", fontSize: 13, marginBottom: 18 }}>
-                  Patient: <strong>{newlySavedPatient.name}</strong>
+                  Patient: <strong>{newlySavedPatient?.name}</strong>
                 </p>
 
+                {inviteError && (
+                  <p style={{ color: "#ef4444", fontSize: 12, marginBottom: 10 }}>{inviteError}</p>
+                )}
+
                 <div className="wt-form-group">
-                  <label>Invite by Email</label>
+                  <label>Invite by Email (Optional)</label>
                   <input
                     type="email"
-                    placeholder="caregiver@example.com"
+                    placeholder="caregiver@example.com (or leave blank for shareable link)"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                   />
                 </div>
 
                 <div className="wt-form-group" style={{ marginTop: 12 }}>
-                  <label>Or by Phone</label>
+                  <label>Or by Phone (Optional)</label>
                   <input
                     type="tel"
                     placeholder="+91 XXXXX XXXXX"
@@ -567,10 +600,14 @@ function Patient() {
                       setInviteSent(false);
                     }}
                   >
-                    Cancel
+                    Close
                   </button>
-                  <button className="wt-btn wt-btn--primary" onClick={() => setInviteSent(true)}>
-                    Send Invitation
+                  <button
+                    className="wt-btn wt-btn--primary"
+                    onClick={handleSendInvite}
+                    disabled={isGeneratingInvite}
+                  >
+                    {isGeneratingInvite ? "Creating Link..." : "Generate Invite Link"}
                   </button>
                 </div>
               </>

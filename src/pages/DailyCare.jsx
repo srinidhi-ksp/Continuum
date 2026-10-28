@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { usePatient } from "../context/PatientContext";
 import { createDailyCareLog } from "../lib/dailyCareApi";
+import VoiceInputButton from "../components/VoiceInputButton";
 
 const CARE_TYPES = ["Food", "Water", "Sleep", "Medication", "Mood", "Symptom", "General Note"];
 
@@ -74,23 +75,58 @@ export default function DailyCare() {
     }
   };
 
+  const normalizeLogType = (rawType) => {
+    const norm = (rawType || "").toLowerCase();
+    if (norm === "food" || norm === "meal") return "Food";
+    if (norm === "water") return "Water";
+    if (norm === "sleep") return "Sleep";
+    if (norm === "medication") return "Medication";
+    if (norm === "mood") return "Mood";
+    if (norm === "symptom") return "Symptom";
+    return "General Note";
+  };
+
   const getLogTitle = (log) => {
-    if (log.type === "Food") return `${log.foodItem}${log.quantity ? ` · ${log.quantity} ${log.unit}` : ""}`;
-    if (log.type === "Water") return `${log.quantity} ${log.unit}`;
-    if (log.type === "Sleep") return `${log.hours || 0}h ${log.minutes || 0}m`;
-    if (log.type === "Medication") return `${log.medName} ${log.medDosage}`;
-    if (log.type === "Mood") return log.mood;
-    if (log.type === "Symptom") return log.symptom;
-    return "Note";
+    const norm = normalizeLogType(log.type);
+    if (norm === "Food") {
+      return log.foodItem
+        ? `${log.foodItem}${log.quantity ? ` · ${log.quantity} ${log.unit || "pieces"}` : ""}`
+        : (log.quantity || log.notes || "Meal logged");
+    }
+    if (norm === "Water") {
+      return log.quantity
+        ? `${log.quantity} ${log.unit || "ml"}`
+        : (log.notes || "Water intake");
+    }
+    if (norm === "Sleep") {
+      if (log.sleep_hours != null) return `${log.sleep_hours}h sleep`;
+      return `${log.hours || 0}h ${log.minutes || 0}m`;
+    }
+    if (norm === "Medication") {
+      return log.medName
+        ? `${log.medName} ${log.medDosage || ""}`
+        : (log.notes || "Medication dose");
+    }
+    if (norm === "Mood") {
+      return log.mood || log.symptoms || log.notes || "Mood observed";
+    }
+    if (norm === "Symptom") {
+      return log.symptom || log.symptoms || log.notes || "Symptom observed";
+    }
+    return log.notes || "Care activity";
   };
 
   const getLogBadge = (log) => {
-    if (log.type === "Medication") return log.medStatus === "Taken" ? { text: "Taken", color: "#1a9a5c", bg: "#e8f8f0" } : log.medStatus === "Skipped" ? { text: "Skipped", color: "#d45c5c", bg: "#fff0f0" } : { text: "Not Taken", color: "#b97a18", bg: "#fff5df" };
-    if (log.type === "Symptom") return { text: log.severity, color: log.severity === "Severe" ? "#d45c5c" : log.severity === "Moderate" ? "#b97a18" : "#1a9a5c", bg: log.severity === "Severe" ? "#fff0f0" : log.severity === "Moderate" ? "#fff5df" : "#e8f8f0" };
+    const norm = normalizeLogType(log.type);
+    if (norm === "Medication") return log.medStatus === "Taken" ? { text: "Taken", color: "#1a9a5c", bg: "#e8f8f0" } : log.medStatus === "Skipped" ? { text: "Skipped", color: "#d45c5c", bg: "#fff0f0" } : { text: "Recorded", color: "#1a9a5c", bg: "#e8f8f0" };
+    if (norm === "Symptom") {
+      const sev = log.severity || (log.symptoms?.includes("Severe") ? "Severe" : log.symptoms?.includes("Moderate") ? "Moderate" : "Mild");
+      return { text: sev, color: sev === "Severe" ? "#d45c5c" : sev === "Moderate" ? "#b97a18" : "#1a9a5c", bg: sev === "Severe" ? "#fff0f0" : sev === "Moderate" ? "#fff5df" : "#e8f8f0" };
+    }
     return null;
   };
 
-  const getIcon = (type) => CARE_ICONS[type] || "📝";
+  const getIcon = (type) => CARE_ICONS[normalizeLogType(type)] || "📝";
 
   return (
     <div className="daily-care-page">
@@ -557,7 +593,7 @@ export default function DailyCare() {
             </h1>
 
             <div className="page-description">
-              Record and monitor {currentPatient.name}'s daily care activities.
+              Record and monitor {currentPatient?.name || "the patient"}'s daily care activities.
             </div>
           </div>
         </div>
@@ -567,21 +603,21 @@ export default function DailyCare() {
           <div className="patient-info">
 
             <div className="patient-avatar">
-              {currentPatient.name.charAt(0)}
+              {(currentPatient?.name || "P").charAt(0)}
             </div>
 
             <div>
               <div className="patient-name">
-                {currentPatient.name}
+                {currentPatient?.name || "No Patient Selected"}
               </div>
 
               <div className="patient-details">
-                {currentPatient.age} years
+                {currentPatient?.age ? `${currentPatient.age} years` : "Age not specified"}
                 <span> • </span>
-                {currentPatient.condition}
+                {currentPatient?.condition || "Condition not specified"}
 
                 <span className="active-status">
-                  ● Care circle active
+                  ● {currentPatient ? "Care circle active" : "No active circle"}
                 </span>
               </div>
             </div>
@@ -637,7 +673,10 @@ export default function DailyCare() {
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Any observations..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -659,7 +698,10 @@ export default function DailyCare() {
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <input className="form-input" placeholder="Optional observation" value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -683,7 +725,10 @@ export default function DailyCare() {
                     <input className="form-input" type="time" value={form.wakeTime || ""} onChange={e => f("wakeTime", e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Any sleep observations..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -716,7 +761,10 @@ export default function DailyCare() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Any observations about this medication..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -733,7 +781,10 @@ export default function DailyCare() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Observation / Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Observation / Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Describe the patient's mood or behaviour..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -743,7 +794,10 @@ export default function DailyCare() {
               {careType === "Symptom" && (
                 <>
                   <div className="form-group">
-                    <label className="form-label">Symptom <span className="required">*</span></label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Symptom <span className="required">*</span></label>
+                      <VoiceInputButton currentText={form.symptom || ""} onTranscript={text => f("symptom", text)} />
+                    </div>
                     <input className="form-input" placeholder="e.g. Dizziness, headache, confusion" value={form.symptom || ""} onChange={e => f("symptom", e.target.value)} />
                   </div>
                   <div className="form-group">
@@ -753,7 +807,10 @@ export default function DailyCare() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Notes</label>
+                      <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                    </div>
                     <textarea className="form-textarea" placeholder="Describe in detail..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                   </div>
                 </>
@@ -762,7 +819,10 @@ export default function DailyCare() {
               {/* GENERAL NOTE */}
               {careType === "General Note" && (
                 <div className="form-group">
-                  <label className="form-label">Note <span className="required">*</span></label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <label className="form-label" style={{ margin: 0 }}>Note <span className="required">*</span></label>
+                    <VoiceInputButton currentText={form.notes || ""} onTranscript={text => f("notes", text)} />
+                  </div>
                   <textarea className="form-textarea" style={{ minHeight: 100 }} placeholder="Write your observation or note..." value={form.notes || ""} onChange={e => f("notes", e.target.value)} />
                 </div>
               )}
@@ -781,7 +841,7 @@ export default function DailyCare() {
             <div className="summary-row">
 
               {CARE_TYPES.map((type) => {
-                const count = currentLogs.filter(log => log.type === type).length;
+                const count = currentLogs.filter(log => normalizeLogType(log.type) === type).length;
                 return (
                   <div className="summary-box" key={type}>
                     <div className="summary-icon">{getIcon(type)}</div>
@@ -817,14 +877,19 @@ export default function DailyCare() {
               {currentLogs.length === 0 ? (
                 <div className="empty-state">No care logs recorded yet for today.</div>
               ) : (
-                currentLogs.map((log) => {
+                currentLogs.map((log, idx) => {
                   const badge = getLogBadge(log);
+                  const displayType = normalizeLogType(log.type);
+                  const logKey = log.log_id || log.id || `log-${idx}`;
+                  const displayTime = log.time || (log.created_at ? new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—");
+                  const addedByName = log.addedBy || log.caregiver?.full_name || "Caregiver";
+
                   return (
-                    <div className="log-item" key={log.id}>
-                      <div className="log-time">{log.time}</div>
-                      <div className="log-icon">{getIcon(log.type)}</div>
+                    <div className="log-item" key={logKey}>
+                      <div className="log-time">{displayTime}</div>
+                      <div className="log-icon">{getIcon(displayType)}</div>
                       <div className="log-main">
-                        <div className="log-type">{log.type}</div>
+                        <div className="log-type">{displayType}</div>
                         <div className="log-title" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           {getLogTitle(log)}
                           {badge && (
@@ -833,16 +898,19 @@ export default function DailyCare() {
                             </span>
                           )}
                         </div>
-                        {log.type === "Medication" && log.scheduledTime && (
+                        {displayType === "Medication" && log.scheduledTime && (
                           <div className="log-quantity">Scheduled: {log.scheduledTime}</div>
                         )}
-                        {log.type === "Sleep" && (
-                          <div className="log-quantity">{log.hours}h {log.minutes}m{log.wakeTime ? ` · Wake: ${log.wakeTime}` : ""}</div>
+                        {displayType === "Sleep" && (
+                          <div className="log-quantity">
+                            {log.sleep_hours != null ? `${log.sleep_hours}h` : `${log.hours || 0}h ${log.minutes || 0}m`}
+                            {log.wakeTime ? ` · Wake: ${log.wakeTime}` : ""}
+                          </div>
                         )}
                         {log.notes ? (
                           <div className="log-details">{log.notes}</div>
                         ) : null}
-                        <div className="log-added">Added by <strong>{log.addedBy}</strong></div>
+                        <div className="log-added">Added by <strong>{addedByName}</strong></div>
                       </div>
                     </div>
                   );
