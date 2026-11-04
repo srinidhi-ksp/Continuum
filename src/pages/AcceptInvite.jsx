@@ -38,8 +38,9 @@ export default function AcceptInvite() {
         setError(`This invitation link is ${inv.reason || "invalid"}.`);
       } else {
         setInvite(inv);
-        // Check if an existing caregiver account matches this email
-        if (inv.email && !inv.email.includes("@carecircle.link")) {
+        if (typeof inv.accountExists === "boolean") {
+          setHasExistingAccount(inv.accountExists);
+        } else if (inv.email && !inv.email.includes("@carecircle.link")) {
           try {
             const { data: existingCg } = await supabase
               .from("caregiver")

@@ -1,11 +1,19 @@
 import { supabase } from "./supabaseClient";
 import { verifyPrimaryCaregiver } from "./taskApi";
 
+const BACKEND_URL = (
+  import.meta.env.VITE_BACKEND_URL ||
+  (typeof window !== "undefined" && !window.location.hostname.includes("localhost")
+    ? "https://continuum-server-4zju.onrender.com"
+    : "http://localhost:8000")
+).replace(/\/+$/, "");
+
 async function sha256Hex(value) {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
 function newToken() {
   if (crypto?.randomUUID) return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
   return `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
@@ -43,26 +51,74 @@ export async function createInvitation({ patientId, invitedBy, email, relationsh
   }
   if (!["family", "external"].includes(role)) throw new Error("Invitation role must be family or external.");
   
-  // If email is provided, normalize it; otherwise generate a placeholder to satisfy DB constraints
   const targetEmail = email && email.trim() ? email.trim().toLowerCase() : `invitee-${Date.now()}@carecircle.link`;
 
-  // Revoke any prior pending invitation for this (patient, email) to avoid 409 Conflict (uq_invitation_pending)
+  // 1. Try Backend API first (handles duplicate pending invitations by reusing/refreshing token)
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/invitations/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        patient_id: patientId,
+        invited_by: invitedBy,
+        email: targetEmail,
+        relationship: relationship || "Family Member",
+        role: role || "family",
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.token && data?.shareableUrl) {
+        return {
+          token: data.token,
+          shareableUrl: data.shareableUrl,
+          invite: data.invite,
+        };
+      }
+    }
+  } catch (backendErr) {
+    console.warn("[invitationApi] Backend create invitation notice, falling back to direct database:", backendErr);
+  }
+
+  // 2. Direct database fallback: safely reuse or refresh prior pending invitation to avoid uq_invitation_pending conflict
+  const token = newToken();
+  const tokenHash = await sha256Hex(token);
+  const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+
   if (!targetEmail.includes("@carecircle.link")) {
     try {
-      await supabase
+      const { data: existing } = await supabase
         .from("invitation")
-        .update({ status: "revoked" })
+        .select("invitation_id")
         .eq("patient_id", patientId)
         .ilike("email", targetEmail)
-        .eq("status", "pending");
-    } catch (revErr) {
-      console.warn("[invitationApi] Prior pending invitation revocation notice:", revErr);
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (existing?.invitation_id) {
+        const { data: updated, error: updErr } = await supabase
+          .from("invitation")
+          .update({
+            token_hash: tokenHash,
+            role,
+            relationship: relationship || "Family Member",
+            invited_by: invitedBy,
+            expires_at: expiresAt,
+            status: "pending",
+          })
+          .eq("invitation_id", existing.invitation_id)
+          .select("*")
+          .single();
+        if (!updErr && updated) {
+          const baseUrl = getAppBaseUrl();
+          return { token, shareableUrl: `${baseUrl}/join?token=${encodeURIComponent(token)}`, invite: updated };
+        }
+      }
+    } catch (reuseErr) {
+      console.warn("[invitationApi] Non-fatal pending reuse notice:", reuseErr);
     }
   }
 
-  const token = newToken();
-  const tokenHash = await sha256Hex(token);
-  
   const payload = {
     patient_id: patientId,
     invited_by: invitedBy,
@@ -71,7 +127,7 @@ export async function createInvitation({ patientId, invitedBy, email, relationsh
     role,
     token_hash: tokenHash,
     status: "pending",
-    expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+    expires_at: expiresAt,
   };
   const { data, error } = await supabase.from("invitation").insert(payload).select("*").single();
   if (error) throw error;
@@ -83,7 +139,36 @@ export async function getInvitationByToken(token) {
   if (!token) return null;
   const cleanToken = extractToken(token);
 
-  // 1. Try secure RPC get_invitation_details (accessible to anon & authenticated)
+  // 1. Try Backend Invitation API first (uses server-side service role, bypasses RLS for anon visitors)
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/invitations/validate?token=${encodeURIComponent(cleanToken)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        if (!data.isValid && data.reason === "not_found") {
+          return null;
+        }
+        return {
+          invitation_id: data.invitation_id,
+          patient_id: data.patient_id,
+          email: data.email,
+          role: data.role,
+          relationship: data.relationship,
+          status: data.status,
+          expires_at: data.expires_at,
+          accountExists: Boolean(data.accountExists),
+          patient: data.patient || { full_name: "Patient", condition_type: "Care Coordination" },
+          inviter: data.inviter || { full_name: "Primary Caregiver" },
+          isValid: Boolean(data.isValid),
+          reason: data.reason || null,
+        };
+      }
+    }
+  } catch (backendErr) {
+    console.warn("[invitationApi] Backend validation notice, falling back to direct database:", backendErr);
+  }
+
+  // 2. Try secure RPC get_invitation_details if available
   try {
     if (typeof supabase?.rpc === "function") {
       const { data: rpcData, error: rpcErr } = await supabase.rpc("get_invitation_details", {
@@ -114,7 +199,7 @@ export async function getInvitationByToken(token) {
     console.warn("[invitationApi] get_invitation_details RPC notice:", rpcEx);
   }
 
-  // 2. Direct table fallback if RPC not yet deployed
+  // 3. Direct table fallback if user is authenticated and has permission
   const tokenHash = await sha256Hex(cleanToken);
   let { data, error } = await supabase.from("invitation")
     .select("*, patient:patient_id ( full_name, condition_type ), inviter:invited_by ( full_name )")
@@ -139,11 +224,40 @@ export async function acceptInvitation(token, caregiverId, customRelationship = 
   if (!token || !caregiverId) throw new Error("Token and caregiverId are required.");
   const cleanToken = extractToken(token);
 
-  // 1. Fetch and validate invite details first
+  // 1. Try backend accept endpoint first
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/invitations/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: cleanToken,
+        caregiver_id: caregiverId,
+        relationship: customRelationship || null,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        patientId: data.patientId,
+        patientName: data.patientName,
+      };
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      if (errData?.detail) {
+        throw new Error(errData.detail);
+      }
+    }
+  } catch (backendErr) {
+    if (backendErr.message?.includes("specifically to")) {
+      throw backendErr;
+    }
+    console.warn("[invitationApi] Backend accept notice, falling back to direct database:", backendErr);
+  }
+
+  // 2. Direct database fallback
   const invite = await getInvitationByToken(cleanToken);
   if (!invite?.isValid) throw new Error(invite ? `Invitation is ${invite.reason || "invalid"}.` : "Invitation not found.");
 
-  // 2. Fetch authenticated caregiver email to enforce email restriction
   const { data: caregiver } = await supabase.from("caregiver").select("email").eq("caregiver_id", caregiverId).maybeSingle();
 
   const isGenericInvite = !invite.email || invite.email.includes("@carecircle.link") || invite.email.includes("@continuum.local");
