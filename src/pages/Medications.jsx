@@ -204,24 +204,46 @@ export default function Medications() {
         {activeTab === "medications" ? (
           <button
             onClick={openAddMed}
+            className="wt-btn wt-btn--primary"
             style={{
-              background: "var(--accent)", color: "white", border: "none", borderRadius: 10,
-              padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(91,87,217,0.25)",
+              background: "var(--primary)",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 18px",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              boxShadow: "0 4px 12px rgba(190, 91, 46, 0.25)",
+              transition: "all 0.2s ease",
             }}
           >
-            <PlusCircle size={16} /> Add Medication
+            <PlusCircle size={16} color="#ffffff" /> Add Medication
           </button>
         ) : (
           <button
             onClick={() => { setApptForm(EMPTY_APPT); setShowApptForm(true); }}
+            className="wt-btn wt-btn--primary"
             style={{
-              background: "var(--accent)", color: "white", border: "none", borderRadius: 10,
-              padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(91,87,217,0.25)",
+              background: "var(--primary)",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 18px",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              boxShadow: "0 4px 12px rgba(190, 91, 46, 0.25)",
+              transition: "all 0.2s ease",
             }}
           >
-            <PlusCircle size={16} /> Schedule Appointment
+            <PlusCircle size={16} color="#ffffff" /> Schedule Appointment
           </button>
         )}
       </div>
@@ -575,7 +597,7 @@ export default function Medications() {
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
                 <button type="button" onClick={closeMedForm} style={{ padding: "10px 18px", border: "1px solid #dfe2e9", borderRadius: 9, background: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                <button type="submit" disabled={submittingMed} style={{ padding: "10px 22px", border: "none", borderRadius: 9, background: "var(--accent)", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                <button type="submit" disabled={submittingMed} className="wt-btn wt-btn--primary" style={{ padding: "10px 22px", border: "none", borderRadius: 9, background: "var(--primary)", color: "#ffffff", fontSize: 13, fontWeight: 700, cursor: submittingMed ? "not-allowed" : "pointer", opacity: submittingMed ? 0.75 : 1 }}>
                   {submittingMed ? "Saving..." : editingMed ? "Update" : "Save Medication"}
                 </button>
               </div>
@@ -628,7 +650,7 @@ export default function Medications() {
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
                 <button type="button" onClick={() => setShowApptForm(false)} style={{ padding: "10px 18px", border: "1px solid #dfe2e9", borderRadius: 9, background: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                <button type="submit" disabled={submittingAppt} style={{ padding: "10px 22px", border: "none", borderRadius: 9, background: "var(--accent)", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                <button type="submit" disabled={submittingAppt} className="wt-btn wt-btn--primary" style={{ padding: "10px 22px", border: "none", borderRadius: 9, background: "var(--primary)", color: "#ffffff", fontSize: 13, fontWeight: 700, cursor: submittingAppt ? "not-allowed" : "pointer", opacity: submittingAppt ? 0.75 : 1 }}>
                   {submittingAppt ? "Scheduling..." : "Schedule Appointment"}
                 </button>
               </div>

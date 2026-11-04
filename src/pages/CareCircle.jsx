@@ -48,6 +48,8 @@ export default function CareCircle() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [invitePhone, setInvitePhone] = useState("");
   const [generatedInvite, setGeneratedInvite] = useState(null);
+  const [inviteError, setInviteError] = useState("");
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Alert Routing Test State
@@ -80,11 +82,18 @@ export default function CareCircle() {
     e.preventDefault();
     if (!currentPatient?.id || !caregiverProfile?.caregiver_id || !isPrimaryCaregiver) return;
 
+    if (!inviteEmail || !inviteEmail.trim()) {
+      setInviteError("Recipient email address is required.");
+      return;
+    }
+
+    setIsGeneratingInvite(true);
+    setInviteError("");
     try {
       const res = await createInvitation({
         patientId: currentPatient.id,
         invitedBy: caregiverProfile.caregiver_id,
-        email: inviteEmail || null,
+        email: inviteEmail.trim(),
         phone: invitePhone || null,
         relationship: inviteRelation,
         role: inviteRole,
@@ -92,6 +101,9 @@ export default function CareCircle() {
       setGeneratedInvite(res);
     } catch (err) {
       console.error("[CareCircle] Failed to generate invite:", err);
+      setInviteError(err.message || "Failed to generate invite. Please try again.");
+    } finally {
+      setIsGeneratingInvite(false);
     }
   };
 
@@ -187,23 +199,27 @@ export default function CareCircle() {
                 setGeneratedInvite(null);
                 setInviteEmail("");
                 setInvitePhone("");
+                setInviteError("");
                 setShowInviteModal(true);
               }}
+              className="wt-btn wt-btn--primary"
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 7,
-                background: "#5b57d9",
-                color: "white",
+                background: "var(--primary)",
+                color: "#ffffff",
                 border: "none",
                 borderRadius: 10,
                 padding: "10px 18px",
                 fontSize: 14,
                 fontWeight: 600,
                 cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(190, 91, 46, 0.25)",
+                transition: "all 0.2s ease",
               }}
             >
-              <UserPlus size={17} /> Invite Caregiver
+              <UserPlus size={17} color="#ffffff" /> Invite Caregiver
             </button>
           ) : (
             <span
@@ -691,12 +707,13 @@ export default function CareCircle() {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
+                  className="wt-btn wt-btn--primary"
                   style={{
                     width: "100%",
                     padding: "12px",
                     borderRadius: 10,
-                    background: "#5b57d9",
-                    color: "white",
+                    background: "var(--primary)",
+                    color: "#ffffff",
                     border: "none",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -704,13 +721,30 @@ export default function CareCircle() {
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 8,
+                    boxShadow: "0 4px 12px rgba(190, 91, 46, 0.25)",
                   }}
                 >
-                  {copied ? <><Check size={16} /> Copied to Clipboard!</> : <><Copy size={16} /> Copy Invite Link</>}
+                  {copied ? <><Check size={16} color="#ffffff" /> Copied to Clipboard!</> : <><Copy size={16} color="#ffffff" /> Copy Invite Link</>}
                 </button>
               </div>
             ) : (
               <form onSubmit={handleCreateInvite}>
+                {inviteError && (
+                  <div
+                    style={{
+                      background: "var(--danger-bg)",
+                      color: "var(--danger)",
+                      border: "1px solid var(--danger)",
+                      borderRadius: 8,
+                      padding: "10px 12px",
+                      fontSize: 13,
+                      marginBottom: 14,
+                    }}
+                  >
+                    {inviteError}
+                  </div>
+                )}
+
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 6 }}>
                     Relationship to Patient
@@ -745,10 +779,11 @@ export default function CareCircle() {
 
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 6 }}>
-                    Invite by Email (Optional)
+                    Invite by Email (Required) *
                   </label>
                   <input
                     type="email"
+                    required
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="caregiver@example.com"
@@ -779,9 +814,21 @@ export default function CareCircle() {
                   </button>
                   <button
                     type="submit"
-                    style={{ padding: "10px 18px", borderRadius: 8, background: "#5b57d9", color: "white", border: "none", fontWeight: 600, cursor: "pointer" }}
+                    disabled={isGeneratingInvite}
+                    className="wt-btn wt-btn--primary"
+                    style={{
+                      padding: "10px 18px",
+                      borderRadius: 8,
+                      background: isGeneratingInvite ? "var(--primary-dark)" : "var(--primary)",
+                      color: "#ffffff",
+                      border: "none",
+                      fontWeight: 600,
+                      cursor: isGeneratingInvite ? "not-allowed" : "pointer",
+                      boxShadow: "0 4px 12px rgba(190, 91, 46, 0.25)",
+                      opacity: isGeneratingInvite ? 0.75 : 1,
+                    }}
                   >
-                    Generate Secure Invite Link
+                    {isGeneratingInvite ? "Generating Invite Link..." : "Generate Invite Link"}
                   </button>
                 </div>
               </form>

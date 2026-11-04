@@ -339,13 +339,25 @@ export default function SettingsPage() {
           <button
             type="submit"
             disabled={isSaving}
+            className="wt-btn wt-btn--primary"
             style={{
-              background: "var(--accent)", color: "white", border: "none", borderRadius: 10,
-              padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 14px rgba(91,87,217,0.3)",
+              background: isSaving ? "var(--primary-dark)" : "var(--primary)",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: 10,
+              padding: "12px 28px",
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: isSaving ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              boxShadow: "0 4px 14px rgba(190, 91, 46, 0.3)",
+              opacity: isSaving ? 0.75 : 1,
+              transition: "all 0.2s ease",
             }}
           >
-            <Save size={16} /> {isSaving ? "Saving..." : "Save Preferences"}
+            <Save size={16} color="#ffffff" /> {isSaving ? "Saving..." : "Save Preferences"}
           </button>
         </div>
       </form>

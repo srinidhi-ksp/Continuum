@@ -323,15 +323,27 @@ select {
 .wt-btn--primary {
   background: var(--primary);
   color: #fff;
+  border: 1px solid var(--primary);
 }
 
-.wt-btn--primary:hover {
+.wt-btn--primary:hover:not(:disabled) {
   background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: #fff;
+}
+
+.wt-btn--primary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.wt-btn--primary:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .wt-btn--primary:disabled,
 .wt-btn--ghost:disabled {
-  opacity: 0.55;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 

@@ -13,14 +13,32 @@ const AuthContext = createContext(null);
 
 const ONBOARDING_KEY = "continuum_needs_onboarding";
 
-const safeStorage =
-  typeof window !== "undefined" && window.sessionStorage
-    ? window.sessionStorage
-    : {
-        getItem: () => null,
-        setItem: () => {},
-        removeItem: () => {},
-      };
+const safeStorage = {
+  getItem: (key) => {
+    try {
+      if (typeof window !== "undefined") {
+        return window.sessionStorage?.getItem(key) || window.localStorage?.getItem(key) || null;
+      }
+    } catch {}
+    return null;
+  },
+  setItem: (key, val) => {
+    try {
+      if (typeof window !== "undefined") {
+        window.sessionStorage?.setItem(key, val);
+        window.localStorage?.setItem(key, val);
+      }
+    } catch {}
+  },
+  removeItem: (key) => {
+    try {
+      if (typeof window !== "undefined") {
+        window.sessionStorage?.removeItem(key);
+        window.localStorage?.removeItem(key);
+      }
+    } catch {}
+  },
+};
 
 async function applyPendingSetup(caregiverId) {
   if (!caregiverId) return null;

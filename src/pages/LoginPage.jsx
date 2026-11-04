@@ -104,18 +104,34 @@ export default function LoginPage() {
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
 
+  const queryToken = searchParams.get("token");
+  const queryEmail = searchParams.get("email");
+  const queryTab = searchParams.get("tab");
+  const isEmailLocked = Boolean(queryToken && queryEmail);
+
   // Auto-verify if token was in query params
   useEffect(() => {
-    const queryToken = searchParams.get("token");
+    if (queryEmail) {
+      setLoginEmail(queryEmail);
+      setEmail(queryEmail);
+    }
+
     if (queryToken) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTab("register");
+      if (queryTab === "login") {
+        setTab("login");
+      } else {
+        setTab("register");
+      }
       setSetupType("join_circle");
       setRegStep(1);
       setInviteTokenInput(queryToken);
       verifyToken(queryToken);
+    } else if (queryTab === "register") {
+      setTab("register");
+    } else if (queryTab === "login") {
+      setTab("login");
     }
-  }, [searchParams]);
+  }, [searchParams, queryToken, queryEmail, queryTab]);
 
   async function verifyToken(raw) {
     if (!raw?.trim()) return;
@@ -153,7 +169,12 @@ export default function LoginPage() {
     try {
       await login(loginEmail, loginPassword);
       await reloadPatients();
-      navigate("/");
+      const currentToken = searchParams.get("token");
+      if (currentToken) {
+        navigate(`/join?token=${encodeURIComponent(currentToken)}`);
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       console.error("[LoginPage] Login error:", err);
       const msg = err.message || "";
@@ -329,7 +350,7 @@ export default function LoginPage() {
         {/* Brand Header */}
         <div
           style={{
-            background: "linear-gradient(135deg, #5b57d9 0%, #3c38b0 100%)",
+            background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
             color: "white",
             padding: "28px 32px 22px",
             textAlign: "center",
@@ -351,7 +372,7 @@ export default function LoginPage() {
           >
             C
           </div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "0.5px" }}>CONTINUUM</h1>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "0.5px", fontFamily: "var(--font-serif, Fraunces, serif)" }}>CONTINUUM</h1>
           <p style={{ margin: "4px 0 0", fontSize: 13, opacity: 0.88 }}>Woven Caregiver Intelligence</p>
         </div>
 
@@ -368,8 +389,8 @@ export default function LoginPage() {
               fontSize: 14,
               fontWeight: 700,
               cursor: "pointer",
-              color: tab === "login" ? "#5b57d9" : "#64748b",
-              borderBottom: `2px solid ${tab === "login" ? "#5b57d9" : "transparent"}`,
+              color: tab === "login" ? "var(--primary)" : "#64748b",
+              borderBottom: `2px solid ${tab === "login" ? "var(--primary)" : "transparent"}`,
             }}
           >
             Log In
@@ -385,8 +406,8 @@ export default function LoginPage() {
               fontSize: 14,
               fontWeight: 700,
               cursor: "pointer",
-              color: tab === "register" ? "#5b57d9" : "#64748b",
-              borderBottom: `2px solid ${tab === "register" ? "#5b57d9" : "transparent"}`,
+              color: tab === "register" ? "var(--primary)" : "#64748b",
+              borderBottom: `2px solid ${tab === "register" ? "var(--primary)" : "transparent"}`,
             }}
           >
             Register & Setup Care
@@ -468,17 +489,18 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={!hasSupabaseConfig || isSubmitting || isAuthLoading}
+              className="wt-btn wt-btn--primary"
               style={{
                 width: "100%",
                 padding: "13px",
                 borderRadius: 10,
-                background: isSubmitting || isAuthLoading ? "#a5b4fc" : "#5b57d9",
-                color: "white",
+                background: isSubmitting || isAuthLoading ? "var(--primary-dark)" : "var(--primary)",
+                color: "#ffffff",
                 border: "none",
                 fontWeight: 700,
                 fontSize: 14,
                 cursor: isSubmitting || isAuthLoading ? "not-allowed" : "pointer",
-                boxShadow: "0 4px 12px rgba(91, 87, 217, 0.25)",
+                boxShadow: "0 4px 12px rgba(190, 91, 46, 0.25)",
               }}
             >
               {isSubmitting ? "Signing In…" : "Log In to Dashboard"}
@@ -492,7 +514,7 @@ export default function LoginPage() {
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#5b57d9",
+                  color: "var(--primary)",
                   fontWeight: 700,
                   fontSize: 13,
                   cursor: "pointer",
@@ -618,13 +640,24 @@ export default function LoginPage() {
                     <div style={{ marginBottom: 14 }}>
                       <label style={lbl}>Email Address *</label>
                       <input
-                        style={inp}
+                        style={{
+                          ...inp,
+                          ...(isEmailLocked ? { background: "#f8fafc", color: "#64748b", cursor: "not-allowed" } : {}),
+                        }}
                         type="email"
                         required
+                        readOnly={isEmailLocked}
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                          if (!isEmailLocked) setEmail(e.target.value);
+                        }}
                         placeholder="caregiver@example.com"
                       />
+                      {isEmailLocked && (
+                        <p style={{ margin: "5px 0 0", fontSize: 11, color: "var(--primary)" }}>
+                          This email was invited by {verifiedInvite?.patient?.full_name || "the care circle"} and cannot be changed.
+                        </p>
+                      )}
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
@@ -675,12 +708,13 @@ export default function LoginPage() {
 
                     <button
                       type="submit"
+                      className="wt-btn wt-btn--primary"
                       style={{
                         width: "100%",
                         padding: "13px",
                         borderRadius: 10,
-                        background: "#5b57d9",
-                        color: "white",
+                        background: "var(--primary)",
+                        color: "#ffffff",
                         border: "none",
                         fontWeight: 700,
                         fontSize: 14,
@@ -689,10 +723,10 @@ export default function LoginPage() {
                         alignItems: "center",
                         justifyContent: "center",
                         gap: 8,
-                        boxShadow: "0 4px 12px rgba(91, 87, 217, 0.25)",
+                        boxShadow: "0 4px 12px rgba(190, 91, 46, 0.25)",
                       }}
                     >
-                      Continue to Care Setup <ArrowRight size={16} />
+                      Continue to Care Setup <ArrowRight size={16} color="#ffffff" />
                     </button>
                   </form>
                 )}
@@ -1109,7 +1143,13 @@ export default function LoginPage() {
                     <div style={{ display: "flex", gap: 10 }}>
                       <button
                         type="button"
-                        onClick={() => setRegStep(2)}
+                        onClick={() => {
+                          if (queryToken) {
+                            setRegStep(1);
+                          } else {
+                            setRegStep(2);
+                          }
+                        }}
                         style={{
                           padding: "12px 16px",
                           borderRadius: 10,
@@ -1126,12 +1166,13 @@ export default function LoginPage() {
                       <button
                         type="submit"
                         disabled={isSubmitting}
+                        className="wt-btn wt-btn--primary"
                         style={{
                           flex: 1,
                           padding: "13px",
                           borderRadius: 10,
-                          background: isSubmitting ? "#a5b4fc" : "#10b981",
-                          color: "white",
+                          background: isSubmitting ? "var(--primary-dark)" : "var(--primary)",
+                          color: "#ffffff",
                           border: "none",
                           fontWeight: 700,
                           fontSize: 14,
@@ -1140,7 +1181,7 @@ export default function LoginPage() {
                           alignItems: "center",
                           justifyContent: "center",
                           gap: 8,
-                          boxShadow: "0 4px 12px rgba(16, 185, 129, 0.25)",
+                          boxShadow: "0 4px 12px rgba(190, 91, 46, 0.25)",
                         }}
                       >
                         {isSubmitting ? "Joining Care Circle…" : "Accept & Join Care Circle"}

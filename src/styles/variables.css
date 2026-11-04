@@ -12,6 +12,14 @@
   --primary-dark: #9c4a24;
   --primary-soft: #fbeae0;
 
+  /* Accent aliases mapping to Continuum primary palette */
+  --accent: var(--primary);
+  --accent-hover: var(--primary-dark);
+  --accent-soft: var(--primary-soft);
+  --accent-subtle: var(--primary-soft);
+  --accent-light: var(--border-strong);
+  --accent-dark: var(--primary-dark);
+
   --background: #faf6ef;      /* warm cream page background */
   --surface: #ffffff;
   --surface-warm: #fffcf7;

@@ -11,6 +11,20 @@ function newToken() {
   return `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 }
 
+export function getAppBaseUrl() {
+  const envUrl = import.meta.env?.VITE_PUBLIC_APP_URL;
+  if (envUrl && typeof envUrl === "string" && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, "");
+  }
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const origin = window.location.origin;
+    if (!origin.includes("localhost") && !origin.includes("127.0.0.1")) {
+      return origin;
+    }
+  }
+  return "https://continuum-beta-seven.vercel.app";
+}
+
 export function extractToken(input) {
   if (!input) return "";
   const str = input.trim();
@@ -29,10 +43,25 @@ export async function createInvitation({ patientId, invitedBy, email, relationsh
   }
   if (!["family", "external"].includes(role)) throw new Error("Invitation role must be family or external.");
   
+  // If email is provided, normalize it; otherwise generate a placeholder to satisfy DB constraints
+  const targetEmail = email && email.trim() ? email.trim().toLowerCase() : `invitee-${Date.now()}@carecircle.link`;
+
+  // Revoke any prior pending invitation for this (patient, email) to avoid 409 Conflict (uq_invitation_pending)
+  if (!targetEmail.includes("@carecircle.link")) {
+    try {
+      await supabase
+        .from("invitation")
+        .update({ status: "revoked" })
+        .eq("patient_id", patientId)
+        .ilike("email", targetEmail)
+        .eq("status", "pending");
+    } catch (revErr) {
+      console.warn("[invitationApi] Prior pending invitation revocation notice:", revErr);
+    }
+  }
+
   const token = newToken();
   const tokenHash = await sha256Hex(token);
-  // If email is not specified (e.g. general circle shareable link), use a placeholder to satisfy DB NOT NULL constraint
-  const targetEmail = email && email.trim() ? email.trim().toLowerCase() : `invitee-${Date.now()}@carecircle.link`;
   
   const payload = {
     patient_id: patientId,
@@ -46,8 +75,8 @@ export async function createInvitation({ patientId, invitedBy, email, relationsh
   };
   const { data, error } = await supabase.from("invitation").insert(payload).select("*").single();
   if (error) throw error;
-  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:5173";
-  return { token, shareableUrl: `${origin}/join?token=${encodeURIComponent(token)}`, invite: data };
+  const baseUrl = getAppBaseUrl();
+  return { token, shareableUrl: `${baseUrl}/join?token=${encodeURIComponent(token)}`, invite: data };
 }
 
 export async function getInvitationByToken(token) {
@@ -110,14 +139,31 @@ export async function acceptInvitation(token, caregiverId, customRelationship = 
   if (!token || !caregiverId) throw new Error("Token and caregiverId are required.");
   const cleanToken = extractToken(token);
 
-  // 1. Try atomic accept_invitation RPC (SECURITY DEFINER)
+  // 1. Fetch and validate invite details first
+  const invite = await getInvitationByToken(cleanToken);
+  if (!invite?.isValid) throw new Error(invite ? `Invitation is ${invite.reason || "invalid"}.` : "Invitation not found.");
+
+  // 2. Fetch authenticated caregiver email to enforce email restriction
+  const { data: caregiver } = await supabase.from("caregiver").select("email").eq("caregiver_id", caregiverId).maybeSingle();
+
+  const isGenericInvite = !invite.email || invite.email.includes("@carecircle.link") || invite.email.includes("@continuum.local");
+  if (!isGenericInvite && caregiver?.email && caregiver.email.toLowerCase() !== invite.email.toLowerCase()) {
+    throw new Error(`This invitation was sent specifically to ${invite.email}. Please sign in with that email address to join.`);
+  }
+
+  // 3. Try atomic accept_invitation RPC (SECURITY DEFINER)
   try {
     if (typeof supabase?.rpc === "function") {
       const { data: acceptedPatientId, error: rpcErr } = await supabase.rpc("accept_invitation", {
         p_token: cleanToken,
         p_relationship: customRelationship || null,
       });
-      if (!rpcErr && acceptedPatientId) {
+      if (rpcErr) {
+        if (rpcErr.message && rpcErr.message.includes("different email")) {
+          throw new Error(`This invitation was sent specifically to ${invite.email}. Please sign in with that email address to join.`);
+        }
+        console.warn("[invitationApi] accept_invitation RPC notice:", rpcErr);
+      } else if (acceptedPatientId) {
         const { data: patientRow } = await supabase
           .from("patient")
           .select("patient_id, full_name")
@@ -125,25 +171,18 @@ export async function acceptInvitation(token, caregiverId, customRelationship = 
           .maybeSingle();
         return {
           patientId: acceptedPatientId,
-          patientName: patientRow?.full_name || "Patient",
+          patientName: patientRow?.full_name || invite.patient?.full_name || "Patient",
         };
       }
     }
   } catch (rpcEx) {
+    if (rpcEx.message?.includes("specifically to")) {
+      throw rpcEx;
+    }
     console.warn("[invitationApi] accept_invitation RPC fallback:", rpcEx);
   }
 
-  // 2. Direct table fallback
-  const invite = await getInvitationByToken(cleanToken);
-  if (!invite?.isValid) throw new Error(invite ? `Invitation is ${invite.reason || "invalid"}.` : "Invitation not found.");
-  
-  const { data: caregiver } = await supabase.from("caregiver").select("email").eq("caregiver_id", caregiverId).maybeSingle();
-
-  const isGenericInvite = !invite.email || invite.email.includes("@carecircle.link") || invite.email.includes("@continuum.local") || invite.email === "family@example.com";
-  if (!isGenericInvite && caregiver?.email && caregiver.email.toLowerCase() !== invite.email.toLowerCase()) {
-    throw new Error(`Sign in with the email address this invitation was sent to (${invite.email}).`);
-  }
-
+  // 4. Direct table fallback
   const relationship = customRelationship || invite.relationship || "Family Member";
 
   const { data: existing } = await supabase.from("caregiver_pat").select("caregiver_id, status")
