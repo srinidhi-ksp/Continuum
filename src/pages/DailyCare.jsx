@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePatient } from "../context/PatientContext";
-import { createDailyCareLog } from "../lib/dailyCareApi";
+import { useAuth } from "../context/AuthContext";
+import { createDailyCareLog, fetchDailyCareLogsByDate, getLocalDateString } from "../lib/dailyCareApi";
+import { recalculateCoordinationScore } from "../lib/coordinationApi";
+import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import VoiceInputButton from "../components/VoiceInputButton";
 
 const CARE_TYPES = ["Food", "Water", "Sleep", "Medication", "Mood", "Symptom", "General Note"];
@@ -17,9 +20,57 @@ const WATER_UNITS = ["ml", "glasses", "litres"];
 
 export default function DailyCare() {
   const { currentPatient, currentMedications, currentLogs, setCurrentLogs, reloadPatientDetail } = usePatient();
+  const { caregiverProfile, session } = useAuth();
   const [careType, setCareType] = useState("Food");
   const [form, setForm] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Date selection state: defaults to today in local timezone
+  const todayStr = getLocalDateString(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDateString(new Date()));
+  const [displayedLogs, setDisplayedLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+
+  const isToday = selectedDate === todayStr;
+
+  const loadLogsForDate = useCallback(async (patientId, dateStr) => {
+    if (!patientId || !dateStr) return;
+    setLogsLoading(true);
+    try {
+      const logs = await fetchDailyCareLogsByDate(patientId, dateStr);
+      setDisplayedLogs(logs || []);
+    } catch (err) {
+      console.error("[DailyCare] Failed to load care logs for date:", err);
+    } finally {
+      setLogsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentPatient?.id) {
+      loadLogsForDate(currentPatient.id, selectedDate);
+    }
+  }, [currentPatient?.id, selectedDate, loadLogsForDate]);
+
+  const handleNavigateDate = (deltaDays) => {
+    const parts = selectedDate.split("-").map(Number);
+    const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+    dt.setDate(dt.getDate() + deltaDays);
+    const nextDateStr = getLocalDateString(dt);
+    if (deltaDays > 0 && nextDateStr > todayStr) return;
+    setSelectedDate(nextDateStr);
+  };
+
+  const formatDateHeader = (dateStr) => {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-").map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
   const handleCareTypeChange = (newType) => {
     setCareType(newType);
@@ -63,10 +114,23 @@ export default function DailyCare() {
 
     setSubmitting(true);
     try {
-      await createDailyCareLog(entry);
-      setCurrentLogs(prev => [{ ...entry, id: Date.now() }, ...(prev || [])]);
+      const saved = await createDailyCareLog(entry);
+      const newLogItem = saved?.log || { ...entry, id: Date.now(), created_at: new Date().toISOString() };
+      if (isToday) {
+        setDisplayedLogs(prev => [newLogItem, ...prev]);
+      }
+      setCurrentLogs(prev => [newLogItem, ...(prev || [])]);
       setForm({});
       if (reloadPatientDetail) reloadPatientDetail();
+
+      // Recalculate score dynamically after logging care
+      if (currentPatient?.id && caregiverProfile?.caregiver_id && session?.access_token) {
+        recalculateCoordinationScore({
+          patientId: currentPatient.id,
+          caregiverId: caregiverProfile.caregiver_id,
+          accessToken: session.access_token,
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error("[DailyCare] Failed to save care log:", err);
       alert("Failed to save care log to Supabase: " + err.message);
@@ -841,7 +905,7 @@ export default function DailyCare() {
             <div className="summary-row">
 
               {CARE_TYPES.map((type) => {
-                const count = currentLogs.filter(log => normalizeLogType(log.type) === type).length;
+                const count = displayedLogs.filter(log => normalizeLogType(log.type) === type).length;
                 return (
                   <div className="summary-box" key={type}>
                     <div className="summary-icon">{getIcon(type)}</div>
@@ -856,28 +920,122 @@ export default function DailyCare() {
             {/* LOGS */}
             <div className="logs-card">
 
-              <div className="logs-header">
+              <div className="logs-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14 }}>
 
                 <div>
                   <h2 className="card-title">
-                    Today's Care Logs
+                    {isToday ? "Today's Care Log" : `Care Log — ${formatDateHeader(selectedDate)}`}
                   </h2>
 
                   <div className="card-subtitle">
-                    Recent activities recorded for the patient.
+                    {isToday
+                      ? "Activities, medications, and observations recorded for today."
+                      : `Historical entries recorded on ${formatDateHeader(selectedDate)}.`}
                   </div>
                 </div>
 
-                <div className="logs-count">
-                  {currentLogs.length} entries
+                {/* Date Selection & Navigation Toolbar */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateDate(-1)}
+                    title="Previous day"
+                    style={{
+                      background: "white",
+                      border: "1px solid #dcdfe8",
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <ChevronLeft size={16} color="#475569" />
+                  </button>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "white",
+                      border: "1px solid #dcdfe8",
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                    }}
+                  >
+                    <Calendar size={15} color="#5b57d9" />
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      max={todayStr}
+                      onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+                      style={{
+                        border: "none",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#1e293b",
+                        outline: "none",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        background: "transparent",
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateDate(1)}
+                    disabled={isToday}
+                    title="Next day"
+                    style={{
+                      background: "white",
+                      border: "1px solid #dcdfe8",
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                      cursor: isToday ? "not-allowed" : "pointer",
+                      opacity: isToday ? 0.35 : 1,
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <ChevronRight size={16} color="#475569" />
+                  </button>
+
+                  {!isToday && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(todayStr)}
+                      style={{
+                        background: "#eeedff",
+                        color: "#5b57d9",
+                        border: "none",
+                        borderRadius: 8,
+                        padding: "6px 12px",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Today
+                    </button>
+                  )}
+
+                  <div className="logs-count">
+                    {displayedLogs.length} {displayedLogs.length === 1 ? "entry" : "entries"}
+                  </div>
                 </div>
 
               </div>
 
-              {currentLogs.length === 0 ? (
-                <div className="empty-state">No care logs recorded yet for today.</div>
+              {logsLoading ? (
+                <div className="empty-state">Loading care logs for {selectedDate}...</div>
+              ) : displayedLogs.length === 0 ? (
+                <div className="empty-state">
+                  No care logs recorded for {isToday ? "today" : formatDateHeader(selectedDate)}.
+                </div>
               ) : (
-                currentLogs.map((log, idx) => {
+                displayedLogs.map((log, idx) => {
                   const badge = getLogBadge(log);
                   const displayType = normalizeLogType(log.type);
                   const logKey = log.log_id || log.id || `log-${idx}`;

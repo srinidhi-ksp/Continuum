@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { STRAIN_WEIGHTS, getCoordinationLevel } from "../config/coordinationConfig";
 
 const WINDOW_DAYS = 7;
 const LATE_THRESHOLD_MINUTES = 30;
@@ -8,7 +9,36 @@ function bounded(value, max) {
 }
 
 export function computeLiveStrainAndScore(features, circleSize = 2) {
-  if (!features) return { strainIndex: 30, score: 70, riskLevel: "moderate", factors: {} };
+  if (!features) {
+    const defaultScore = 75;
+    const defaultStrain = 25;
+    const levelInfo = getCoordinationLevel(defaultScore);
+    return {
+      strainIndex: defaultStrain,
+      score: defaultScore,
+      riskLevel: "moderate",
+      levelInfo,
+      mainReasons: ["Care coordination tracking initialized."],
+      suggestedActions: [
+        {
+          id: "act-log-care",
+          title: "Log daily care activities",
+          description: "Record meals, medications, and sleep in Daily Care to generate live coordination scores.",
+          category: "Daily Care",
+          severity: "low",
+        },
+      ],
+      factors: {
+        missedOverdue: 0,
+        workload: 0,
+        nightInterruptions: 0,
+        sleepDisruption: "Unavailable",
+        taskImbalance: 0,
+        lateLogging: 0,
+      },
+      unavailableMetrics: ["sleep"],
+    };
+  }
 
   // 1. Missed / overdue tasks (25%)
   const missedOverdue = (features.missed_tasks || 0) + (features.overdue_tasks || 0);
@@ -23,7 +53,9 @@ export function computeLiveStrainAndScore(features, circleSize = 2) {
   const nightFactor = bounded((nightInt / 3) * 100, 100);
 
   // 4. Sleep disruption (15%)
-  let sleepFactor = 30;
+  // Rule: Missing sleep information must trigger a request to record sleep data
+  // rather than automatically being treated as evidence of severe sleep disruption.
+  let sleepFactor = 0;
   let sleepUnavailable = false;
   if (features.avg_sleep_hours != null) {
     if (features.avg_sleep_hours >= 7.5) sleepFactor = 0;
@@ -32,6 +64,7 @@ export function computeLiveStrainAndScore(features, circleSize = 2) {
     else sleepFactor = bounded(((8.0 - features.avg_sleep_hours) / 4) * 100, 100);
   } else {
     sleepUnavailable = true;
+    sleepFactor = 0; // Neutral: do not penalize as severe disruption when unrecorded
   }
 
   // 5. Task imbalance (15%)
@@ -45,21 +78,116 @@ export function computeLiveStrainAndScore(features, circleSize = 2) {
   const lateFactor = bounded((lateLogs / 4) * 100, 100);
 
   const strainIndex = Math.round(
-    0.25 * missedFactor +
-    0.20 * workloadFactor +
-    0.15 * nightFactor +
-    0.15 * sleepFactor +
-    0.15 * imbalanceFactor +
-    0.10 * lateFactor
+    STRAIN_WEIGHTS.missed_tasks * missedFactor +
+    STRAIN_WEIGHTS.care_workload * workloadFactor +
+    STRAIN_WEIGHTS.night_interruptions * nightFactor +
+    STRAIN_WEIGHTS.sleep_disruption * sleepFactor +
+    STRAIN_WEIGHTS.task_imbalance * imbalanceFactor +
+    STRAIN_WEIGHTS.late_logging * lateFactor
   );
 
+  // Care Coordination Score = 100 - Strain Index
   const score = Math.max(0, Math.min(100, 100 - strainIndex));
   const riskLevel = score >= 75 ? "low" : score >= 50 ? "moderate" : "elevated";
+  const levelInfo = getCoordinationLevel(score);
+
+  // Dynamic user-facing reasons based on actual data
+  const mainReasons = [];
+  const suggestedActions = [];
+
+  if (missedOverdue > 0) {
+    mainReasons.push(`${missedOverdue} care task${missedOverdue > 1 ? "s are" : " is"} currently missed or overdue.`);
+    suggestedActions.push({
+      id: "action-complete-tasks",
+      title: "Complete priority tasks",
+      description: "Review and complete overdue care activities in the task list to keep routines on schedule.",
+      category: "Tasks",
+      severity: "high",
+    });
+  }
+
+  if (sleepUnavailable) {
+    mainReasons.push("Sleep information has not been recorded yet.");
+    suggestedActions.push({
+      id: "action-record-sleep",
+      title: "Record missing sleep information",
+      description: "Log sleep hours in Daily Care to help monitor patient recovery and rest patterns.",
+      category: "Daily Care",
+      severity: "medium",
+    });
+  } else if (sleepFactor > 25) {
+    mainReasons.push(`Recent sleep averages ${features.avg_sleep_hours?.toFixed(1) || "low"} hrs, indicating interrupted rest.`);
+    suggestedActions.push({
+      id: "action-improve-sleep",
+      title: "Address sleep disruption",
+      description: "Ensure evening routines are calm and minimize nighttime interruptions where possible.",
+      category: "Daily Care",
+      severity: "medium",
+    });
+  }
+
+  if (imbalanceFactor > 30) {
+    const sharePct = Math.round((actualShare || 0) * 100);
+    mainReasons.push(`Workload distribution is uneven (${sharePct}% handled by primary caregiver).`);
+    suggestedActions.push({
+      id: "action-share-tasks",
+      title: "Share tasks with another caregiver",
+      description: "Reassign non-urgent tasks to secondary caregivers in the circle to balance workload.",
+      category: "Care Circle",
+      severity: "high",
+    });
+  } else if (workloadFactor > 60) {
+    mainReasons.push("Care workload volume is currently elevated across the circle.");
+    suggestedActions.push({
+      id: "action-review-workload",
+      title: "Review workload distribution",
+      description: "Check task assignments with other circle caregivers to share upcoming care duties.",
+      category: "Care Circle",
+      severity: "medium",
+    });
+  }
+
+  if (nightInt > 1) {
+    mainReasons.push(`${nightInt} nighttime care interruptions were logged in the past week.`);
+    suggestedActions.push({
+      id: "action-night-rotation",
+      title: "Rotate night duty",
+      description: "Consider alternating night check-ins among caregivers to prevent exhaustion.",
+      category: "Night Care",
+      severity: "medium",
+    });
+  }
+
+  if (lateLogs > 0) {
+    mainReasons.push(`${lateLogs} care activities were logged after their scheduled time.`);
+    suggestedActions.push({
+      id: "action-set-reminders",
+      title: "Set medication reminders",
+      description: "Keep notifications enabled to log medication and care activities right on schedule.",
+      category: "Medication",
+      severity: "low",
+    });
+  }
+
+  if (mainReasons.length === 0) {
+    mainReasons.push("All scheduled tasks and daily care logs are currently up to date.");
+    suggestedActions.push({
+      id: "action-maintain-routine",
+      title: "Maintain current care routine",
+      description: "Daily care coordination is operating smoothly. Continue logging daily care and task completion.",
+      category: "Coordination",
+      severity: "low",
+    });
+  }
 
   return {
     strainIndex,
     score,
     riskLevel,
+    levelInfo,
+    mainReasons,
+    suggestedActions,
+    unavailableMetrics: sleepUnavailable ? ["sleep"] : [],
     factors: {
       missedOverdue: Math.round(missedFactor),
       workload: Math.round(workloadFactor),

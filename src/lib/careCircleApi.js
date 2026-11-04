@@ -1,4 +1,5 @@
-import { supabase } from "./supabaseClient";
+import { supabase, getCaregiverId } from "./supabaseClient";
+import { verifyPrimaryCaregiver } from "./taskApi";
 
 // Default responsibilities available in the application
 export const CARE_RESPONSIBILITIES = [
@@ -68,6 +69,7 @@ function mapMemberRow(r, full) {
   const cg = r.caregiver || {};
   return {
     id: r.caregiver_id || cg.caregiver_id,
+    caregiver_id: r.caregiver_id || cg.caregiver_id,
     name: cg.full_name || "Caregiver",
     email: cg.email || "",
     phone: cg.phone || "",
@@ -83,6 +85,21 @@ function mapMemberRow(r, full) {
 }
 
 export async function updateCareCircleMember(patientId, caregiverId, updates) {
+  const callerId = getCaregiverId();
+  const isPrimary = await verifyPrimaryCaregiver(patientId, callerId);
+  if (!isPrimary) {
+    throw new Error("Unauthorized: Only the Main/Primary Caregiver can edit caregiver roles and tasks.");
+  }
+
+  // If promoting an eligible secondary caregiver to primary, demote existing primary to family
+  if (updates.role === "primary" && caregiverId !== callerId) {
+    await supabase
+      .from("caregiver_pat")
+      .update({ role: "family" })
+      .eq("patient_id", patientId)
+      .eq("role", "primary");
+  }
+
   const payload = {};
   if (updates.role !== undefined) payload.role = updates.role;
   if (updates.relationship !== undefined) payload.relationship = updates.relationship;
@@ -106,6 +123,12 @@ export async function updateCareCircleMember(patientId, caregiverId, updates) {
 }
 
 export async function removeCareCircleMember(patientId, caregiverId) {
+  const callerId = getCaregiverId();
+  const isPrimary = await verifyPrimaryCaregiver(patientId, callerId);
+  if (!isPrimary) {
+    throw new Error("Unauthorized: Only the Main/Primary Caregiver can remove caregivers from the Care Circle.");
+  }
+
   const { error } = await supabase
     .from("caregiver_pat")
     .update({ status: "revoked" })

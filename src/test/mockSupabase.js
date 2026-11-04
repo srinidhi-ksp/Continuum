@@ -16,6 +16,7 @@ const PK_COLUMN = {
   scenario_attempt: "attempt_id",
   health_report: "report_id",
   appointment: "appointment_id",
+  care_task: "task_id",
   caregiver_pat: null, // composite PK — no auto-ID needed
 };
 
@@ -27,6 +28,12 @@ function embedRelations(table, row, selectString, caregivers, patients) {
     const caregiver = caregivers?.find((c) => c.caregiver_id === cgId) || null;
     out.caregiver = caregiver ? { ...caregiver } : null;
     out.inviter = caregiver ? { ...caregiver } : null;
+  }
+  if (selectString.includes("assignee:assigned_to") || selectString.includes("assigner:assigned_by")) {
+    const assignee = caregivers?.find((c) => c.caregiver_id === row.assigned_to) || null;
+    const assigner = caregivers?.find((c) => c.caregiver_id === row.assigned_by) || null;
+    out.assignee = assignee ? { ...assignee } : null;
+    out.assigner = assigner ? { ...assigner } : null;
   }
   if (selectString.includes("patient:patient_id")) {
     const patient = patients?.find((p) => p.patient_id === row.patient_id) || null;

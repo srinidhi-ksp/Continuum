@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { verifyPrimaryCaregiver } from "./taskApi";
 
 async function sha256Hex(value) {
   const bytes = new TextEncoder().encode(value);
@@ -21,6 +22,11 @@ export function extractToken(input) {
 
 export async function createInvitation({ patientId, invitedBy, email, relationship = "Family Member", role = "family" }) {
   if (!patientId || !invitedBy) throw new Error("Patient ID and inviter caregiver ID are required.");
+
+  const isPrimary = await verifyPrimaryCaregiver(patientId, invitedBy);
+  if (!isPrimary) {
+    throw new Error("Unauthorized: Only the Main/Primary Caregiver can invite caregivers.");
+  }
   if (!["family", "external"].includes(role)) throw new Error("Invitation role must be family or external.");
   
   const token = newToken();

@@ -79,6 +79,32 @@ export async function fetchMyTasks(patientId, caregiverId) {
 }
 
 /**
+ * Verify whether a caregiver has primary/main caregiver privileges for a patient.
+ */
+export async function verifyPrimaryCaregiver(patientId, caregiverId) {
+  const cId = caregiverId || getCaregiverId();
+  if (!cId || !patientId) return false;
+
+  const { data: member } = await supabase
+    .from("caregiver_pat")
+    .select("role, status")
+    .eq("patient_id", patientId)
+    .eq("caregiver_id", cId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (member?.role === "primary") return true;
+
+  const { data: patient } = await supabase
+    .from("patient")
+    .select("created_by")
+    .eq("patient_id", patientId)
+    .maybeSingle();
+
+  return patient?.created_by === cId;
+}
+
+/**
  * Assign a new task (primary caregiver creation).
  */
 export async function assignTask({
@@ -95,6 +121,11 @@ export async function assignTask({
   const assignedBy = getCaregiverId();
   if (!patientId || !title?.trim()) {
     throw new Error("Patient ID and task title are required.");
+  }
+
+  const isPrimary = await verifyPrimaryCaregiver(patientId, assignedBy);
+  if (!isPrimary) {
+    throw new Error("Unauthorized: Only the Main/Primary Caregiver can assign tasks.");
   }
 
   // 1. Try RPC if available
@@ -166,6 +197,20 @@ export async function assignTask({
  */
 export async function reassignTask({ taskId, newAssigneeId }) {
   if (!taskId) throw new Error("Task ID is required.");
+  const currentCgId = getCaregiverId();
+
+  const { data: taskRow } = await supabase
+    .from("care_task")
+    .select("patient_id")
+    .eq("task_id", taskId)
+    .maybeSingle();
+
+  if (taskRow?.patient_id) {
+    const isPrimary = await verifyPrimaryCaregiver(taskRow.patient_id, currentCgId);
+    if (!isPrimary) {
+      throw new Error("Unauthorized: Only the Main/Primary Caregiver can reassign tasks.");
+    }
+  }
 
   try {
     if (typeof supabase?.rpc === "function") {
@@ -214,6 +259,21 @@ export async function reassignTask({ taskId, newAssigneeId }) {
  */
 export async function setTaskStatus({ taskId, status, note = null }) {
   if (!taskId || !status) throw new Error("Task ID and status are required.");
+  const currentCgId = getCaregiverId();
+
+  const { data: taskRow } = await supabase
+    .from("care_task")
+    .select("patient_id, assigned_to")
+    .eq("task_id", taskId)
+    .maybeSingle();
+
+  if (taskRow && currentCgId) {
+    const isAssignee = taskRow.assigned_to === currentCgId;
+    const isPrimary = await verifyPrimaryCaregiver(taskRow.patient_id, currentCgId);
+    if (!isAssignee && !isPrimary) {
+      throw new Error("Unauthorized: You can only complete tasks assigned to you.");
+    }
+  }
 
   const now = new Date().toISOString();
   const isCompleted = status === "completed";

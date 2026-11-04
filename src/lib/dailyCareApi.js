@@ -1,5 +1,43 @@
 import { supabase, getCaregiverId } from "./supabaseClient";
 
+export function getLocalDateString(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Fetch daily care logs for a specific calendar date in local timezone.
+ * Applies backend timestamp filtering so only that date's logs are returned.
+ */
+export async function fetchDailyCareLogsByDate(patientId, dateStr) {
+  if (!patientId || !dateStr) return [];
+
+  // Parse YYYY-MM-DD in local time
+  const parts = dateStr.split("-").map(Number);
+  const year = parts[0];
+  const month = parts[1] - 1;
+  const day = parts[2];
+
+  const startOfDay = new Date(year, month, day, 0, 0, 0, 0);
+  const endOfDay = new Date(year, month, day, 23, 59, 59, 999);
+
+  const { data, error } = await supabase
+    .from("daily_care_log")
+    .select("*, caregiver:caregiver_id ( full_name )")
+    .eq("patient_id", patientId)
+    .gte("created_at", startOfDay.toISOString())
+    .lte("created_at", endOfDay.toISOString())
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[dailyCareApi] Failed to fetch daily care logs for date:", error);
+    throw error;
+  }
+  return data || [];
+}
+
 export async function fetchDailyCareLogs(patientId, limit = 50) {
   if (!patientId) return [];
 

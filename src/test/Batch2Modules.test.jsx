@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fixtures from "./fixtures";
 
-const { mockSupabase, getMockCaregiverId } = await vi.hoisted(async () => {
+const { mockSupabase, getMockCaregiverId, setMockCaregiverId } = await vi.hoisted(async () => {
   const { createMockSupabase } = await import("./mockSupabase");
   const fixtures = await import("./fixtures");
   let mockCaregiverId = fixtures.CURRENT_CAREGIVER_ID;
@@ -22,6 +22,7 @@ const { mockSupabase, getMockCaregiverId } = await vi.hoisted(async () => {
     scenario_attempt: structuredClone(fixtures.scenarioAttempts),
     health_report: structuredClone(fixtures.healthReports),
     appointment: structuredClone(fixtures.appointments),
+    care_task: structuredClone(fixtures.careTasks),
   });
   return {
     mockSupabase: mockSup,
@@ -34,7 +35,7 @@ vi.mock("../lib/supabaseClient", () => ({
   supabase: mockSupabase,
   CURRENT_CAREGIVER_ID: fixtures.CURRENT_CAREGIVER_ID,
   getCaregiverId: getMockCaregiverId,
-  setCurrentCaregiverId: (id) => { if (id) getMockCaregiverId.mockId = id; },
+  setCurrentCaregiverId: setMockCaregiverId,
 }));
 
 // Suppress jsPDF browser API errors in Node test environment
@@ -75,6 +76,18 @@ import {
 } from "../lib/reportApi";
 
 import { recalculateCoordinationScore } from "../lib/coordinationApi";
+import {
+  fetchPatientTasks,
+  fetchMyTasks,
+  assignTask,
+  reassignTask,
+  setTaskStatus,
+  verifyPrimaryCaregiver,
+} from "../lib/taskApi";
+import {
+  updateCareCircleMember,
+  removeCareCircleMember,
+} from "../lib/careCircleApi";
 
 const PATIENT_1 = "22222222-2222-2222-2222-222222222201";
 const CAREGIVER_1 = "11111111-1111-1111-1111-111111111101";
@@ -425,5 +438,146 @@ describe("recalculateCoordinationScore (/ml/predict)", () => {
         accessToken: "valid-token",
       })
     ).rejects.toThrow(/did not include a numeric score/i);
+  });
+});
+
+// ── Task Management & Primary Caregiver Permissions (Requirement 1) ──────────
+
+describe("Task Management & Role Permissions", () => {
+  const CAREGIVER_2_SECONDARY = "11111111-1111-1111-1111-111111111102";
+
+  beforeEach(() => {
+    setMockCaregiverId(CAREGIVER_1);
+  });
+
+  it("fetchPatientTasks returns all patient tasks with assignee info", async () => {
+    const tasks = await fetchPatientTasks(PATIENT_1);
+    expect(Array.isArray(tasks)).toBe(true);
+    expect(tasks.length).toBeGreaterThan(0);
+    expect(tasks[0]).toHaveProperty("task_id");
+    expect(tasks[0]).toHaveProperty("title");
+    expect(tasks[0].patient_id).toBe(PATIENT_1);
+  });
+
+  it("fetchMyTasks returns only tasks assigned to the current caregiver", async () => {
+    const myTasks = await fetchMyTasks(PATIENT_1, CAREGIVER_1);
+    expect(Array.isArray(myTasks)).toBe(true);
+    myTasks.forEach((t) => expect(t.assigned_to).toBe(CAREGIVER_1));
+  });
+
+  it("assignTask succeeds when called by Primary Caregiver", async () => {
+    setMockCaregiverId(CAREGIVER_1);
+    const newTask = await assignTask({
+      patientId: PATIENT_1,
+      title: "Afternoon Blood Pressure Check",
+      category: "vitals",
+      priority: "normal",
+      assignedTo: CAREGIVER_2_SECONDARY,
+    });
+    expect(newTask).toBeTruthy();
+    expect(newTask.title).toBe("Afternoon Blood Pressure Check");
+    expect(newTask.status).toBe("pending");
+  });
+
+  it("assignTask throws Unauthorized when attempted by secondary caregiver", async () => {
+    setMockCaregiverId(CAREGIVER_2_SECONDARY);
+    await expect(
+      assignTask({
+        patientId: PATIENT_1,
+        title: "Unauthorized Task Creation",
+      })
+    ).rejects.toThrow(/Only the Main\/Primary Caregiver can assign tasks/i);
+  });
+
+  it("reassignTask succeeds when called by Primary Caregiver", async () => {
+    setMockCaregiverId(CAREGIVER_1);
+    const reassigned = await reassignTask({
+      taskId: "88888888-8888-8888-8888-888888888801",
+      newAssigneeId: CAREGIVER_2_SECONDARY,
+    });
+    expect(reassigned).toBeTruthy();
+    expect(reassigned.assigned_to).toBe(CAREGIVER_2_SECONDARY);
+  });
+
+  it("reassignTask throws Unauthorized when attempted by secondary caregiver", async () => {
+    setMockCaregiverId(CAREGIVER_2_SECONDARY);
+    await expect(
+      reassignTask({
+        taskId: "88888888-8888-8888-8888-888888888801",
+        newAssigneeId: CAREGIVER_1,
+      })
+    ).rejects.toThrow(/Only the Main\/Primary Caregiver can reassign tasks/i);
+  });
+
+  it("setTaskStatus marks task as completed for assigned caregiver", async () => {
+    setMockCaregiverId(CAREGIVER_1);
+    const updated = await setTaskStatus({
+      taskId: "88888888-8888-8888-8888-888888888801",
+      status: "completed",
+    });
+    expect(updated).toBeTruthy();
+    expect(updated.status).toBe("completed");
+  });
+
+  it("setTaskStatus prevents non-assignee non-primary caregiver from completing someone else's task", async () => {
+    // Caregiver 3 (Arun) is neither primary nor assignee of task 2 (assigned to Priya)
+    const CAREGIVER_3 = "11111111-1111-1111-1111-111111111103";
+    setMockCaregiverId(CAREGIVER_3);
+    await expect(
+      setTaskStatus({
+        taskId: "88888888-8888-8888-8888-888888888802",
+        status: "completed",
+      })
+    ).rejects.toThrow(/You can only complete tasks assigned to you/i);
+  });
+});
+
+// ── Caregiver Circle Administrative Permissions (Requirement 3) ──────────────
+
+describe("Caregiver Circle Administrative Permissions", () => {
+  const CAREGIVER_2_SECONDARY = "11111111-1111-1111-1111-111111111102";
+
+  beforeEach(() => {
+    setMockCaregiverId(CAREGIVER_1);
+  });
+
+  it("verifyPrimaryCaregiver correctly identifies primary vs non-primary roles", async () => {
+    const isPrimary = await verifyPrimaryCaregiver(PATIENT_1, CAREGIVER_1);
+    const isSecondary = await verifyPrimaryCaregiver(PATIENT_1, CAREGIVER_2_SECONDARY);
+    expect(isPrimary).toBe(true);
+    expect(isSecondary).toBe(false);
+  });
+
+  it("updateCareCircleMember succeeds when executed by Primary Caregiver", async () => {
+    setMockCaregiverId(CAREGIVER_1);
+    await expect(
+      updateCareCircleMember(PATIENT_1, CAREGIVER_2_SECONDARY, {
+        relationship: "Primary Contact",
+        alertPriority: 1,
+      })
+    ).resolves.not.toThrow();
+  });
+
+  it("updateCareCircleMember throws Unauthorized when attempted by secondary caregiver", async () => {
+    setMockCaregiverId(CAREGIVER_2_SECONDARY);
+    await expect(
+      updateCareCircleMember(PATIENT_1, CAREGIVER_1, {
+        role: "family",
+      })
+    ).rejects.toThrow(/Only the Main\/Primary Caregiver can edit caregiver roles/i);
+  });
+
+  it("removeCareCircleMember succeeds when executed by Primary Caregiver", async () => {
+    setMockCaregiverId(CAREGIVER_1);
+    await expect(
+      removeCareCircleMember(PATIENT_1, "11111111-1111-1111-1111-111111111103")
+    ).resolves.not.toThrow();
+  });
+
+  it("removeCareCircleMember throws Unauthorized when attempted by secondary caregiver", async () => {
+    setMockCaregiverId(CAREGIVER_2_SECONDARY);
+    await expect(
+      removeCareCircleMember(PATIENT_1, "11111111-1111-1111-1111-111111111103")
+    ).rejects.toThrow(/Only the Main\/Primary Caregiver can remove caregivers/i);
   });
 });

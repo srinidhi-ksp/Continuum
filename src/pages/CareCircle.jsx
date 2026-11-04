@@ -53,6 +53,11 @@ export default function CareCircle() {
   // Alert Routing Test State
   const [routedAlertResult, setRoutedAlertResult] = useState(null);
 
+  const currentMember = members.find(
+    (m) => (m.id === caregiverProfile?.caregiver_id || m.caregiver_id === caregiverProfile?.caregiver_id)
+  );
+  const isPrimaryCaregiver = currentMember?.role === "primary" || currentPatient?.created_by === caregiverProfile?.caregiver_id;
+
   const loadMembers = useCallback(async () => {
     if (!currentPatient?.id) return;
     setLoading(true);
@@ -73,7 +78,7 @@ export default function CareCircle() {
 
   const handleCreateInvite = async (e) => {
     e.preventDefault();
-    if (!currentPatient?.id || !caregiverProfile?.caregiver_id) return;
+    if (!currentPatient?.id || !caregiverProfile?.caregiver_id || !isPrimaryCaregiver) return;
 
     try {
       const res = await createInvitation({
@@ -92,7 +97,7 @@ export default function CareCircle() {
 
   const handleSaveMemberEdit = async (e) => {
     e.preventDefault();
-    if (!editingMember || !currentPatient?.id) return;
+    if (!editingMember || !currentPatient?.id || !isPrimaryCaregiver) return;
 
     try {
       await updateCareCircleMember(currentPatient.id, editingMember.id, {
@@ -112,6 +117,7 @@ export default function CareCircle() {
   };
 
   const handleRemoveMember = async (caregiverId) => {
+    if (!isPrimaryCaregiver) return;
     if (!window.confirm("Are you sure you want to remove this caregiver from the Care Circle?")) {
       return;
     }
@@ -175,29 +181,46 @@ export default function CareCircle() {
           >
             <AlertTriangle size={16} /> Alert Priority Routing
           </button>
-          <button
-            onClick={() => {
-              setGeneratedInvite(null);
-              setInviteEmail("");
-              setInvitePhone("");
-              setShowInviteModal(true);
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              background: "#5b57d9",
-              color: "white",
-              border: "none",
-              borderRadius: 10,
-              padding: "10px 18px",
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            <UserPlus size={17} /> Invite Caregiver
-          </button>
+          {isPrimaryCaregiver ? (
+            <button
+              onClick={() => {
+                setGeneratedInvite(null);
+                setInviteEmail("");
+                setInvitePhone("");
+                setShowInviteModal(true);
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                background: "#5b57d9",
+                color: "white",
+                border: "none",
+                borderRadius: 10,
+                padding: "10px 18px",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <UserPlus size={17} /> Invite Caregiver
+            </button>
+          ) : (
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#64748b",
+                background: "#f1f5f9",
+                borderRadius: 8,
+                padding: "8px 14px",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              Managed by Primary Caregiver
+            </span>
+          )}
         </div>
       </div>
 
@@ -327,46 +350,48 @@ export default function CareCircle() {
                       </div>
                     </div>
 
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() => setEditingMember({ ...m })}
-                        style={{
-                          background: "#f1f5f9",
-                          border: "none",
-                          borderRadius: 8,
-                          padding: "8px 12px",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "#475569",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <Edit2 size={13} /> Edit Role & Tasks
-                      </button>
-                      {m.role !== "primary" && (
+                    {isPrimaryCaregiver && (
+                      <div style={{ display: "flex", gap: 8 }}>
                         <button
-                          onClick={() => handleRemoveMember(m.id)}
+                          onClick={() => setEditingMember({ ...m })}
                           style={{
-                            background: "#fef2f2",
+                            background: "#f1f5f9",
                             border: "none",
                             borderRadius: 8,
                             padding: "8px 12px",
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#ef4444",
+                            color: "#475569",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                             gap: 6,
                           }}
                         >
-                          <Trash2 size={13} /> Remove
+                          <Edit2 size={13} /> Edit Role & Tasks
                         </button>
-                      )}
-                    </div>
+                        {m.role !== "primary" && (
+                          <button
+                            onClick={() => handleRemoveMember(m.id)}
+                            style={{
+                              background: "#fef2f2",
+                              border: "none",
+                              borderRadius: 8,
+                              padding: "8px 12px",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: "#ef4444",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <Trash2 size={13} /> Remove
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Attributes row: Alert priority & Assigned responsibilities */}

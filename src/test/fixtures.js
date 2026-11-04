@@ -101,4 +101,41 @@ export let healthReports = [
 
 export let appointments = [];
 
+export let careTasks = [
+  {
+    task_id: "88888888-8888-8888-8888-888888888801",
+    patient_id: "22222222-2222-2222-2222-222222222201",
+    title: "Morning Medication Assistance",
+    description: "Ensure morning meds are taken after breakfast.",
+    category: "medication",
+    priority: "high",
+    assigned_to: "11111111-1111-1111-1111-111111111101",
+    assigned_by: "11111111-1111-1111-1111-111111111101",
+    due_at: new Date(Date.now() + 3600000).toISOString(),
+    grace_minutes: 30,
+    is_essential: true,
+    status: "pending",
+    completed_at: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    task_id: "88888888-8888-8888-8888-888888888802",
+    patient_id: "22222222-2222-2222-2222-222222222201",
+    title: "Evening Walk & Hydration",
+    description: "Accompany patient for 15-minute garden walk.",
+    category: "activity",
+    priority: "normal",
+    assigned_to: "11111111-1111-1111-1111-111111111102",
+    assigned_by: "11111111-1111-1111-1111-111111111101",
+    due_at: new Date(Date.now() + 7200000).toISOString(),
+    grace_minutes: 30,
+    is_essential: false,
+    status: "pending",
+    completed_at: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
 export function resetFixtures() {}

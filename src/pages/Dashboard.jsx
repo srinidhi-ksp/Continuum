@@ -196,9 +196,10 @@ function Dashboard() {
   // Live Score and Strain Index calculation over rolling 7-day window
   const hasSavedMetric = coordinationMetric?.score != null;
   const liveStats = computeLiveStrainAndScore(coordinationMetric?.features, careCircle.length);
-  const score = hasSavedMetric ? coordinationMetric.score : null;
-  const strainIndex = hasSavedMetric ? (coordinationMetric?.strain_index ?? liveStats.strainIndex) : liveStats.strainIndex;
+  const score = hasSavedMetric ? coordinationMetric.score : liveStats.score;
+  const strainIndex = hasSavedMetric ? (coordinationMetric?.strain_index ?? Math.max(0, 100 - score)) : liveStats.strainIndex;
   const riskLevel = coordinationMetric?.risk_level ?? (hasSavedMetric ? liveStats.riskLevel : null);
+  const coordinationLevel = liveStats.levelInfo;
   const recommendation =
     coordinationMetric?.recommendation ??
     (hasSavedMetric
@@ -244,6 +245,14 @@ function Dashboard() {
     try {
       await setTaskStatus({ taskId, status });
       await reloadPatientTasks?.();
+      // Recalculate score dynamically after task completion
+      if (currentPatient?.id && caregiverProfile?.caregiver_id && session?.access_token) {
+        recalculateCoordinationScore({
+          patientId: currentPatient.id,
+          caregiverId: caregiverProfile.caregiver_id,
+          accessToken: session.access_token,
+        }).then(() => reloadPatientDetail?.()).catch(() => {});
+      }
     } catch (err) {
       setTaskActionError(err.message || "Failed to update task status.");
     } finally {
@@ -460,60 +469,75 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ---------- Action Path & Contributing Factors ---------- */}
+      {/* ---------- Care Coordination Dashboard (User-Friendly) ---------- */}
       <section className="wt-panel" style={{ padding: "var(--space-5)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-4)", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "var(--space-4)", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <p className="wt-eyebrow">Care Action Path</p>
-            <h3 style={{ margin: 0 }}>Strain Index & Action Engine</h3>
+            <p className="wt-eyebrow">Care Coordination</p>
+            <h3 style={{ margin: 0, fontSize: 20 }}>Coordination Health & Insights</h3>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-secondary)" }}>
+              {coordinationLevel?.description || "Real-time summary of care routines, task sharing, and daily logs."}
+            </p>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <span className={`wt-pill wt-pill--${riskLevel === "low" ? "success" : riskLevel === "elevated" ? "danger" : "neutral"}`}>
-              Strain: {strainIndex} / 100 ({riskLevel})
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span
+              className="wt-pill"
+              style={{
+                background: coordinationLevel?.bg || "#eeedff",
+                color: coordinationLevel?.color || "#5b57d9",
+                fontWeight: 700,
+                fontSize: 13,
+                padding: "6px 14px",
+              }}
+            >
+              {coordinationLevel?.label || "Good Coordination"} ({score}/100)
             </span>
-            <span className="wt-pill wt-pill--neutral">Rolling 7-day window</span>
+            <span className="wt-pill wt-pill--neutral">Rolling 7-Day Window</span>
           </div>
         </div>
 
-        {/* Factors Breakdown */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: "var(--space-5)" }}>
-          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Missed / Overdue (25%)</span>
-            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, color: liveStats.factors.missedOverdue > 25 ? "var(--danger)" : "var(--text-primary)" }}>
-              {liveStats.factors.missedOverdue}%
+        {/* Overview Row: Score + Main Reasons */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 18, marginBottom: 20 }}>
+          {/* Main Reasons affecting score */}
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "16px 18px" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
+              <span>Factors Affecting Score</span>
             </p>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: 8, lineHeight: 1.5 }}>
+              {(liveStats.mainReasons || []).map((reason, idx) => (
+                <li key={idx} style={{ color: reason.includes("overdue") || reason.includes("missed") ? "var(--danger)" : "var(--text-secondary)" }}>
+                  {reason}
+                </li>
+              ))}
+            </ul>
           </div>
-          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Workload Volume (20%)</span>
-            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700 }}>{liveStats.factors.workload}%</p>
-          </div>
-          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Night Interruptions (15%)</span>
-            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, color: liveStats.factors.nightInterruptions > 30 ? "var(--warning)" : "var(--text-primary)" }}>
-              {liveStats.factors.nightInterruptions}%
+
+          {/* Priority / Overdue Care Items */}
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "16px 18px" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
+              <span>Priority & Overdue Items</span>
             </p>
-          </div>
-          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Sleep Disruption (15%)</span>
-            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700 }}>
-              {typeof liveStats.factors.sleepDisruption === "number" ? `${liveStats.factors.sleepDisruption}%` : liveStats.factors.sleepDisruption}
+            {overdueCount > 0 ? (
+              <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger)", borderRadius: "var(--radius-sm)", padding: "10px 14px", marginBottom: 8, fontSize: 13, color: "var(--danger)", display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={16} />
+                <span><strong>{overdueCount} task{overdueCount !== 1 ? "s" : ""}</strong> currently overdue — prompt completion recommended.</span>
+              </div>
+            ) : (
+              <p style={{ fontSize: 13, color: "var(--success)", display: "flex", alignItems: "center", gap: 6, margin: "0 0 8px" }}>
+                <CheckCircle size={15} /> All priority care tasks are on schedule!
+              </p>
+            )}
+            <p style={{ fontSize: 12, color: "var(--text-faint)", margin: 0 }}>
+              {recommendation}
             </p>
-          </div>
-          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Task Imbalance (15%)</span>
-            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700 }}>{liveStats.factors.taskImbalance}%</p>
-          </div>
-          <div style={{ background: "var(--background)", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-            <span style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>Late Logging (10%)</span>
-            <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700 }}>{liveStats.factors.lateLogging}%</p>
           </div>
         </div>
 
-        {/* Suggested Actions with Accept/Decline */}
-        <div>
-          <p className="wt-eyebrow" style={{ marginBottom: 8 }}>Suggested Actions (Accept / Decline)</p>
+        {/* Suggested Actions to Improve Coordination */}
+        <div style={{ marginBottom: 14 }}>
+          <p className="wt-eyebrow" style={{ marginBottom: 10 }}>Suggested Actions to Improve Coordination</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {suggestedActions.map((act) => {
+            {(liveStats.suggestedActions || []).map((act) => {
               const decision = actionDecisions[act.id];
               return (
                 <div
@@ -542,7 +566,7 @@ function Dashboard() {
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {decision ? (
                       <span className={`wt-pill wt-pill--${decision === "accepted" ? "success" : "neutral"}`}>
-                        {decision === "accepted" ? "✓ Accepted" : "Declined"}
+                        {decision === "accepted" ? "✓ Accepted" : "Dismissed"}
                       </span>
                     ) : (
                       <>
@@ -560,7 +584,7 @@ function Dashboard() {
                           style={{ padding: "6px 14px", fontSize: 12 }}
                           onClick={() => handleDecision(act.id, "declined")}
                         >
-                          <X size={13} /> Decline
+                          <X size={13} /> Dismiss
                         </button>
                       </>
                     )}
@@ -570,6 +594,29 @@ function Dashboard() {
             })}
           </div>
         </div>
+
+        {/* Internal Engine Inspection Disclosure for Demo & Technical Explanation */}
+        <details style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+          <summary style={{ fontSize: 12, color: "var(--text-faint)", cursor: "pointer", fontWeight: 600 }}>
+            Technical Engine Details (For Inspection & Project Demo)
+          </summary>
+          <div style={{ marginTop: 12, padding: "12px 16px", background: "var(--background)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+            <p style={{ fontSize: 12, fontWeight: 700, margin: "0 0 8px", color: "var(--text-primary)" }}>
+              Internal Strain Calculation (Strain Index = 100 - Score = {strainIndex} / 100):
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8, fontSize: 11, color: "var(--text-secondary)" }}>
+              <div>• Missed/Overdue: 25% weight ({liveStats.factors.missedOverdue}%)</div>
+              <div>• Care Workload: 20% weight ({liveStats.factors.workload}%)</div>
+              <div>• Night Interruptions: 15% weight ({liveStats.factors.nightInterruptions}%)</div>
+              <div>• Sleep Disruption: 15% weight ({liveStats.factors.sleepDisruption}%)</div>
+              <div>• Task Imbalance: 15% weight ({liveStats.factors.taskImbalance}%)</div>
+              <div>• Late Logging: 10% weight ({liveStats.factors.lateLogging}%)</div>
+            </div>
+            <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "8px 0 0" }}>
+              Formula: Care Coordination Score = 100 − (0.25·Missed + 0.20·Workload + 0.15·Night + 0.15·Sleep + 0.15·Imbalance + 0.10·Late).
+            </p>
+          </div>
+        </details>
       </section>
 
       {/* ---------- Tasks Management Section ---------- */}
@@ -687,40 +734,27 @@ function Dashboard() {
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {/* Status Display */}
+                    {/* Status Display: Only Pending or Completed */}
                     <span
                       className={`wt-pill wt-pill--${
-                        t.status === "completed" ? "success" : t.status === "in_progress" ? "warning" : "neutral"
+                        t.status === "completed" ? "success" : "neutral"
                       }`}
                       style={{ textTransform: "capitalize" }}
                     >
-                      {t.status === "in_progress" ? "In Progress" : t.status}
+                      {t.status === "completed" ? "Completed" : "Pending"}
                     </span>
 
-                    {/* Member action buttons on My Tasks */}
-                    {isMine && t.status !== "completed" && (
-                      <>
-                        {t.status === "pending" && (
-                          <button
-                            type="button"
-                            className="wt-btn wt-btn--ghost"
-                            style={{ padding: "6px 12px", fontSize: 12 }}
-                            onClick={() => handleSetTaskStatus(t.task_id, "in_progress")}
-                            disabled={taskActionLoading}
-                          >
-                            <Play size={12} /> Start
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="wt-btn wt-btn--primary"
-                          style={{ padding: "6px 12px", fontSize: 12 }}
-                          onClick={() => handleSetTaskStatus(t.task_id, "completed")}
-                          disabled={taskActionLoading}
-                        >
-                          <Check size={12} /> Complete
-                        </button>
-                      </>
+                    {/* Member action button: Complete (NO Start button) */}
+                    {(isMine || isPrimaryCaregiver) && t.status !== "completed" && (
+                      <button
+                        type="button"
+                        className="wt-btn wt-btn--primary"
+                        style={{ padding: "6px 12px", fontSize: 12 }}
+                        onClick={() => handleSetTaskStatus(t.task_id, "completed")}
+                        disabled={taskActionLoading}
+                      >
+                        <Check size={12} /> Complete
+                      </button>
                     )}
 
                     {/* Primary Caregiver Reassign Button */}

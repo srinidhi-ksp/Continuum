@@ -18,12 +18,19 @@ function uid() {
   return crypto.randomUUID();
 }
 
+function isTaskOverdue(task) {
+  if (!task || !task.due_at) return false;
+  if (task.status === "completed" || task.status === "cancelled") return false;
+  return new Date(task.due_at) < new Date();
+}
+
 // ── Component ───────────────────────────────────────────────────────────
 export default function Assistant() {
   const { caregiverProfile, session } = useAuth();
   const {
     currentPatient, careCircle, coordinationMetric,
-    currentMedications, currentLogs, todaysReminders
+    currentMedications, currentLogs, todaysReminders,
+    patientTasks, currentAppointments
   } = usePatient();
 
   const [lang, setLang] = useState("en");
@@ -98,9 +105,23 @@ export default function Assistant() {
       caregivers: (careCircle || []).map((c) => ({
         name: c.name, role: c.role, active: c.status === "active",
       })),
+      tasks: (patientTasks || []).map((t) => ({
+        title: t.title,
+        status: t.status === "completed" ? "completed" : "pending",
+        priority: t.priority,
+        is_overdue: isTaskOverdue(t),
+        assigned_to_name: t.assignee?.full_name || "Unassigned",
+      })),
+      appointments: (currentAppointments || []).map((a) => ({
+        doctor: a.doctor_name,
+        hospital: a.hospital,
+        date: a.appointment_date,
+        status: a.status,
+      })),
+      coordinationFactors: coordinationMetric?.features || null,
       caregiverName: caregiverProfile?.full_name || "Caregiver",
     };
-  }, [currentPatient, coordinationMetric, currentMedications, currentLogs, todaysReminders, careCircle, caregiverProfile]);
+  }, [currentPatient, coordinationMetric, currentMedications, currentLogs, todaysReminders, careCircle, caregiverProfile, patientTasks, currentAppointments]);
 
   // ── Send message ──────────────────────────────────────────────────────
   const handleSend = useCallback(async (text) => {

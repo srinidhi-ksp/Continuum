@@ -1,5 +1,5 @@
-const TIMEOUT_MS = 20000;
-const OUT_OF_SCOPE = /\b(president|prime minister|capital of|weather|sports|score|poem|homework|movie|actor|actress|crypto|bitcoin|stock price|election|celebrity|recipe|tell me a joke|who is the president)\b/i;
+const TIMEOUT_MS = 30000;
+const OUT_OF_SCOPE = /\b(president|prime minister|capital of|weather|sports\s+score|game\s+score|poem|homework|movie|actor|actress|crypto|bitcoin|stock price|election|celebrity|recipe|tell me a joke|who is the president)\b/i;
 const MEDICAL_DECISION = /\b(recommend.*(medication|medicine|drug|treatment|dose|pill)|which medicine|what medicine|change.*(dosage|dose|medicine)|increase.*dose|decrease.*dose|stop.*(medication|medicine)|prescribe|what dose|what pill|should (i|we) give|can (i|we) give|give (her|him|them).*pill|dosage of|mg of)\b/i;
 
 export async function askCaregiverAssistant({ message, patientContext = {}, language = "en", accessToken }) {
@@ -11,7 +11,7 @@ export async function askCaregiverAssistant({ message, patientContext = {}, lang
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const response = await fetch(`${backend.replace(/\/$/, "")}/ai/chat`, {
+    const response = await fetch(`${backend}/ai/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
       body: JSON.stringify({ message: text, context: patientContext, language }),
