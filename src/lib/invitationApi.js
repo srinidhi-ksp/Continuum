@@ -204,16 +204,6 @@ export async function getInvitationByToken(token) {
   let { data, error } = await supabase.from("invitation")
     .select("*, patient:patient_id ( full_name, condition_type ), inviter:invited_by ( full_name )")
     .eq("token_hash", tokenHash).maybeSingle();
-    
-  if (!data) {
-    const fallback = await supabase.from("invitation")
-      .select("*, patient:patient_id ( full_name, condition_type ), inviter:invited_by ( full_name )")
-      .eq("token", cleanToken).maybeSingle();
-    if (fallback.data) {
-      data = fallback.data;
-      error = fallback.error;
-    }
-  }
 
   if (error || !data) return null;
   const expired = new Date(data.expires_at) < new Date();
